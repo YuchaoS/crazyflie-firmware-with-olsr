@@ -84,6 +84,8 @@ typedef struct toaMeasurement_s {
 
 typedef struct tdoaMeasurement_s {
   toaMeasurement_t measurement[2];
+  double distDiff;
+  float timeDiff;
   float stdDev;
 } tdoaMeasurement_t;
 

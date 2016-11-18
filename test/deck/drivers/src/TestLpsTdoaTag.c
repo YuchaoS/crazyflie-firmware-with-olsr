@@ -111,9 +111,8 @@ void testDifferenceOfDistanceWithNoClockDrift() {
 
 
 void testKalmanEstimatorWithNoClockDrift() {
-  #ifndef ESTIMATOR_TYPE_kalman
   TEST_IGNORE();
-  #endif
+
   // Fixture
   // Two anchors (A0 and A1), separated by 1.0m
   // Distance from A0 to tag is 2.0m
@@ -202,9 +201,8 @@ void testDifferenceOfDistanceWithNoClockDriftWithTagClockWrapping() {
 }
 
 void testKalmanEstimatorWithNoClockDriftWithTagClockWrapping() {
-  #ifndef ESTIMATOR_TYPE_kalman
   TEST_IGNORE();
-  #endif
+
   // Fixture
   // Two anchors (A0 and A1), separated by 1.0m
   // Distance from A0 to tag is 2.0m
@@ -250,9 +248,8 @@ void testKalmanEstimatorWithNoClockDriftWithTagClockWrapping() {
 }
 
 void testKalmanEstimatorWithNoClockDriftWithA0ClockWrapping() {
-  #ifndef ESTIMATOR_TYPE_kalman
   TEST_IGNORE();
-  #endif
+
   // Fixture
   // Two anchors (A0 and A1), separated by 1.0m
   // Distance from A0 to tag is 2.0m
@@ -298,9 +295,8 @@ void testKalmanEstimatorWithNoClockDriftWithA0ClockWrapping() {
 }
 
 void testKalmanEstimatorWithNoClockDriftWithA1ClockWrapping() {
-  #ifndef ESTIMATOR_TYPE_kalman
   TEST_IGNORE();
-  #endif
+
   // Fixture
   // Two anchors (A0 and A1), separated by 1.0m
   // Distance from A0 to tag is 2.0m

@@ -79,29 +79,25 @@ static uint64_t truncateToTimeStamp(uint64_t fullTimeStamp) {
   return fullTimeStamp & 0x00FFFFFFFFFFul;
 }
 
-static int64_t eliminateClockWrap(clockWrap_t* data, int64_t time) {
-  if ((time < data->latestTime)) {
-    data->offset += 0x10000000000;
-  }
+static int64_t previuosTime;
 
-  data->latestTime = time;
-
-  return time + data->offset;
-}
-
-static void enqueueTDOA(uint8_t anchor, int64_t rxAn_by_T_in_cl_T, int64_t txAn_in_cl_M) {
+static void enqueueTDOA(uint8_t anchor, double distDiff, int64_t rxTime) {
   tdoaMeasurement_t tdoa = {.stdDev = MEASUREMENT_NOISE_STD};
 
-  memcpy(&(tdoa.measurement[0]), &lastTOA, sizeof(toaMeasurement_t));
+  tdoa.distDiff = distDiff;
+  tdoa.measurement[1].rx = rxTime - previuosTime;
+  previuosTime = rxTime;
+
+  tdoa.measurement[0].senderId = 0;
+  tdoa.measurement[0].x = options->anchorPosition[0].x;
+  tdoa.measurement[0].y = options->anchorPosition[0].y;
+  tdoa.measurement[0].z = options->anchorPosition[0].z;
 
   tdoa.measurement[1].senderId = anchor;
-  tdoa.measurement[1].rx = eliminateClockWrap(&clockWrapTag, rxAn_by_T_in_cl_T);
-  tdoa.measurement[1].tx = eliminateClockWrap(&clockWrapMaster, txAn_in_cl_M);
   tdoa.measurement[1].x = options->anchorPosition[anchor].x;
   tdoa.measurement[1].y = options->anchorPosition[anchor].y;
   tdoa.measurement[1].z = options->anchorPosition[anchor].z;
 
-  memcpy(&lastTOA, &tdoa.measurement[1], sizeof(toaMeasurement_t));
 #ifdef ESTIMATOR_TYPE_kalman
   stateEstimatorEnqueueTDOA(&tdoa);
 #endif
@@ -138,7 +134,6 @@ static void rxcallback(dwDevice_t *dev) {
         clockCorrection_T_To_M = frameTime_in_cl_M / frameTime_in_T;
       }
 
-      enqueueTDOA(MASTER, rxAn_by_T_in_cl_T, txM_in_cl_M);
     } else {
       int64_t previous_txAn_in_cl_An = timestampToUint64(rxPacketBuffer[anchor].timestamps[anchor]);
       int64_t rxAn_by_M_in_cl_M = timestampToUint64(rxPacketBuffer[MASTER].timestamps[anchor]);
@@ -159,14 +154,13 @@ static void rxcallback(dwDevice_t *dev) {
       int64_t tof_M_to_An_in_cl_M = (((truncateToTimeStamp(rxM_by_An_in_cl_An - previous_txAn_in_cl_An) * clockCorrection_An_To_M) - truncateToTimeStamp(txM_in_cl_M - rxAn_by_M_in_cl_M))) / 2.0;
       int64_t delta_txM_to_txAn_in_cl_M = (tof_M_to_An_in_cl_M + truncateToTimeStamp(txAn_in_cl_An - rxM_by_An_in_cl_An) * clockCorrection_An_To_M);
       int64_t timeDiffOfArrival_in_cl_M =  truncateToTimeStamp(rxAn_by_T_in_cl_T - rxM_by_T_in_cl_T) * clockCorrection_T_To_M - delta_txM_to_txAn_in_cl_M;
-      int64_t txAn_in_cl_M = txM_in_cl_M + delta_txM_to_txAn_in_cl_M;
 
       float tdoaDistDiff = SPEED_OF_LIGHT * timeDiffOfArrival_in_cl_M / LOCODECK_TS_FREQ;
 
       // Sanity check distances in case of missed packages
       if (tdoaDistDiff > -MAX_DISTANCE_DIFF && tdoaDistDiff < MAX_DISTANCE_DIFF) {
         uwbTdoaDistDiff[anchor] = tdoaDistDiff;
-        enqueueTDOA(anchor, rxAn_by_T_in_cl_T, txAn_in_cl_M);
+        enqueueTDOA(anchor, tdoaDistDiff, rxAn_by_T_in_cl_T);
       }
     }
 
@@ -239,4 +233,5 @@ LOG_ADD(LOG_FLOAT, d04, &uwbTdoaDistDiff[4])
 LOG_ADD(LOG_FLOAT, d05, &uwbTdoaDistDiff[5])
 LOG_ADD(LOG_FLOAT, d06, &uwbTdoaDistDiff[6])
 LOG_ADD(LOG_FLOAT, d07, &uwbTdoaDistDiff[7])
+
 LOG_GROUP_STOP(tdoa)
