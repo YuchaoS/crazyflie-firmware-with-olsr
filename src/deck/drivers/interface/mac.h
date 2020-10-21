@@ -45,6 +45,7 @@ typedef struct packet_s {
 #define MAC802154_TYPE_DATA 1
 #define MAC802154_TYPE_ACK 2
 #define MAC802154_TYPE_CMD 3
+#define MAC802154_TYPE_OLSR 4
 
 #define MAC802154_HEADER_LENGTH 21
 

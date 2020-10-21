@@ -55,7 +55,9 @@
 #include "lpsTdoa2Tag.h"
 #include "lpsTdoa3Tag.h"
 #include "lpsTwrTag.h"
-
+#include "uwbOlsr.h"
+#include "olsrStruct.h"
+#include "olsrAlgo.h"
 
 #define CS_PIN DECK_GPIO_IO1
 
@@ -77,7 +79,7 @@
 #endif
 
 
-#define DEFAULT_RX_TIMEOUT 10000
+#define DEFAULT_RX_TIMEOUT 0
 
 
 #define ANTENNA_OFFSET 154.6   // In meter
@@ -92,6 +94,8 @@ static lpsAlgoOptions_t algoOptions = {
   .userRequestedMode = lpsMode_TDoA2,
 #elif LPS_TDOA3_ENABLE
   .userRequestedMode = lpsMode_TDoA3,
+#elif LPS_OLSR_ENABLE
+  .userRequestedMode = lpsMode_OLSR, //add to 
 #elif defined(LPS_TWR_ENABLE)
   .userRequestedMode = lpsMode_TWR,
 #else
@@ -112,12 +116,15 @@ struct {
   [lpsMode_TWR] = {.algorithm = &uwbTwrTagAlgorithm, .name="TWR"},
   [lpsMode_TDoA2] = {.algorithm = &uwbTdoa2TagAlgorithm, .name="TDoA2"},
   [lpsMode_TDoA3] = {.algorithm = &uwbTdoa3TagAlgorithm, .name="TDoA3"},
+  [lpsMode_OLSR] = {.algorithm = &uwbOLSRAlgorithm,.name ="OLSR"},
 };
 
 #if LPS_TDOA_ENABLE
 static uwbAlgorithm_t *algorithm = &uwbTdoa2TagAlgorithm;
 #elif LPS_TDOA3_ENABLE
 static uwbAlgorithm_t *algorithm = &uwbTdoa3TagAlgorithm;
+#elif LPS_OLDR_ENABLE
+static uwbAlgorithm_t *algorithm = &uwbOLSRAlgorithm;
 #else
 static uwbAlgorithm_t *algorithm = &uwbTwrTagAlgorithm;
 #endif
@@ -130,23 +137,24 @@ static dwDevice_t *dwm = &dwm_device;
 
 static QueueHandle_t lppShortQueue;
 
-static uint32_t timeout;
 
 static STATS_CNT_RATE_DEFINE(spiWriteCount, 1000);
 static STATS_CNT_RATE_DEFINE(spiReadCount, 1000);
 
 static void txCallback(dwDevice_t *dev)
 {
-  timeout = algorithm->onEvent(dev, eventPacketSent);
+  return;
 }
 
 static void rxCallback(dwDevice_t *dev)
 {
-  timeout = algorithm->onEvent(dev, eventPacketReceived);
+  olsr_rxCallback(dev);
+
 }
 
-static void rxTimeoutCallback(dwDevice_t * dev) {
-  timeout = algorithm->onEvent(dev, eventReceiveTimeout);
+static void rxTimeoutCallback(dwDevice_t * dev) 
+{
+  return;
 }
 
 // This function is called from the memory sub system that runs in a different
@@ -185,107 +193,109 @@ uint8_t locoDeckGetActiveAnchorIdList(uint8_t unorderedAnchorList[], const int m
   if (!isInit) {
     return 0;
   }
-
   xSemaphoreTake(algoSemaphore, portMAX_DELAY);
   uint8_t result = algorithm->getActiveAnchorIdList(unorderedAnchorList, maxListSize);
   xSemaphoreGive(algoSemaphore);
   return result;
 }
 
-static bool switchToMode(const lpsMode_t newMode) {
-  bool result = false;
+// static bool switchToMode(const lpsMode_t newMode) {
+//   bool result = false;
 
-  if (lpsMode_auto != newMode && newMode <= LPS_NUMBER_OF_ALGORITHMS) {
-    algoOptions.currentRangingMode = newMode;
-    algorithm = algorithmsList[algoOptions.currentRangingMode].algorithm;
+//   if (lpsMode_auto != newMode && newMode <= LPS_NUMBER_OF_ALGORITHMS) {
+//     algoOptions.currentRangingMode = newMode;
+//     algorithm = algorithmsList[algoOptions.currentRangingMode].algorithm;
 
-    algorithm->init(dwm);
-    timeout = algorithm->onEvent(dwm, eventTimeout);
+//     algorithm->init(dwm);
+//     timeout = algorithm->onEvent(dwm, eventTimeout);
 
-    result = true;
-  }
+//     result = true;
+//   }
 
-  return result;
-}
+//   return result;
+// }
 
-static void autoModeSearchTryMode(const lpsMode_t newMode, const uint32_t now) {
-  // Set up next time to check
-  algoOptions.nextSwitchTick = now + LPS_AUTO_MODE_SWITCH_PERIOD;
-  switchToMode(newMode);
-}
+// static void autoModeSearchTryMode(const lpsMode_t newMode, const uint32_t now) {
+//   // Set up next time to check
+//   algoOptions.nextSwitchTick = now + LPS_AUTO_MODE_SWITCH_PERIOD;
+//   switchToMode(newMode);
+// }
 
-static lpsMode_t autoModeSearchGetNextMode() {
-  lpsMode_t newMode = algoOptions.currentRangingMode + 1;
-  if (newMode > LPS_NUMBER_OF_ALGORITHMS) {
-    newMode = lpsMode_TWR;
-  }
+// static lpsMode_t autoModeSearchGetNextMode() {
+//   lpsMode_t newMode = algoOptions.currentRangingMode + 1;
+//   if (newMode > LPS_NUMBER_OF_ALGORITHMS) {
+//     newMode = lpsMode_TWR;
+//   }
 
-  return newMode;
-}
+//   return newMode;
+// }
 
-static void processAutoModeSwitching() {
-  uint32_t now = xTaskGetTickCount();
+// static void processAutoModeSwitching() {
+//   uint32_t now = xTaskGetTickCount();
 
-  if (algoOptions.modeAutoSearchActive) {
-    if (algoOptions.modeAutoSearchDoInitialize) {
-      autoModeSearchTryMode(lpsMode_TDoA2, now);
-      algoOptions.modeAutoSearchDoInitialize = false;
-    } else {
-      if (now > algoOptions.nextSwitchTick) {
-        if (algorithm->isRangingOk()) {
-          // We have found an algorithm, stop searching and lock to it.
-          algoOptions.modeAutoSearchActive = false;
-          DEBUG_PRINT("Automatic mode: detected %s\n", algorithmsList[algoOptions.currentRangingMode].name);
-        } else {
-          lpsMode_t newMode = autoModeSearchGetNextMode();
-          autoModeSearchTryMode(newMode, now);
-        }
-      }
-    }
-  }
-}
+//   if (algoOptions.modeAutoSearchActive) {
+//     if (algoOptions.modeAutoSearchDoInitialize) {
+//       autoModeSearchTryMode(lpsMode_TDoA2, now);
+//       algoOptions.modeAutoSearchDoInitialize = false;
+//     } else {
+//       if (now > algoOptions.nextSwitchTick) {
+//         if (algorithm->isRangingOk()) {
+//           // We have found an algorithm, stop searching and lock to it.
+//           algoOptions.modeAutoSearchActive = false;
+//           DEBUG_PRINT("Automatic mode: detected %s\n", algorithmsList[algoOptions.currentRangingMode].name);
+//         } else {
+//           lpsMode_t newMode = autoModeSearchGetNextMode();
+//           autoModeSearchTryMode(newMode, now);
+//         }
+//       }
+//     }
+//   }
+// }
 
-static void resetAutoSearchMode() {
-  algoOptions.modeAutoSearchActive = true;
-  algoOptions.modeAutoSearchDoInitialize = true;
-}
+// static void resetAutoSearchMode() {
+//   algoOptions.modeAutoSearchActive = true;
+//   algoOptions.modeAutoSearchDoInitialize = true;
+// }
 
-static void handleModeSwitch() {
-  if (algoOptions.userRequestedMode == lpsMode_auto) {
-    processAutoModeSwitching();
-  } else {
-    resetAutoSearchMode();
-    if (algoOptions.userRequestedMode != algoOptions.currentRangingMode) {
-      if (switchToMode(algoOptions.userRequestedMode)) {
-        DEBUG_PRINT("Switching to mode %s\n", algorithmsList[algoOptions.currentRangingMode].name);
-      }
-    }
-  }
-}
+// static void handleModeSwitch() {
+//   if (algoOptions.userRequestedMode == lpsMode_auto) {
+//     processAutoModeSwitching();
+//   } else {
+//     resetAutoSearchMode();
+//     if (algoOptions.userRequestedMode != algoOptions.currentRangingMode) {
+//       if (switchToMode(algoOptions.userRequestedMode)) {
+//         DEBUG_PRINT("Switching to mode %s\n", algorithmsList[algoOptions.currentRangingMode].name);
+//       }
+//     }
+//   }
+// }
 
 static void uwbTask(void* parameters) {
-  lppShortQueue = xQueueCreate(10, sizeof(lpsLppShortPacket_t));
+  // lppShortQueue = xQueueCreate(10, sizeof(lpsLppShortPacket_t));
 
-  algoOptions.currentRangingMode = lpsMode_auto;
-
+  // algoOptions.currentRangingMode = lpsMode_auto;
+  algorithm = &uwbOLSRAlgorithm;
   systemWaitStart();
+  algorithm->init(dwm);
+  while(1){
 
-  while(1) {
-    xSemaphoreTake(algoSemaphore, portMAX_DELAY);
-    handleModeSwitch();
-    xSemaphoreGive(algoSemaphore);
+    dwHandleInterrupt(dwm);
+    vTaskDelay(100);
+    // xSemaphoreTake(algoSemaphore, portMAX_DELAY);
+    // handleModeSwitch();
+    // xSemaphoreGive(algoSemaphore);
 
-    if (ulTaskNotifyTake(pdTRUE, timeout / portTICK_PERIOD_MS) > 0) {
-      do{
-        xSemaphoreTake(algoSemaphore, portMAX_DELAY);
-        dwHandleInterrupt(dwm);
-        xSemaphoreGive(algoSemaphore);
-      } while(digitalRead(GPIO_PIN_IRQ) != 0);
-    } else {
-      xSemaphoreTake(algoSemaphore, portMAX_DELAY);
-      timeout = algorithm->onEvent(dwm, eventTimeout);
-      xSemaphoreGive(algoSemaphore);
-    }
+    // if (ulTaskNotifyTake(pdTRUE, timeout / portTICK_PERIOD_MS) > 0) {
+    //   do{
+    //     xSemaphoreTake(algoSemaphore, portMAX_DELAY);
+    //     dwHandleInterrupt(dwm);
+    //     xSemaphoreGive(algoSemaphore);
+    //   } while(digitalRead(GPIO_PIN_IRQ) != 0);
+    // } else {
+    //   xSemaphoreTake(algoSemaphore, portMAX_DELAY);
+    //   timeout = algorithm->onEvent(dwm, eventTimeout);
+    //   xSemaphoreGive(algoSemaphore);
+    // }
   }
 }
 
@@ -453,7 +463,7 @@ static void dwm1000Init(DeckInfo *info)
   dwUseSmartPower(dwm, true);
   #endif
 
-  dwSetReceiveWaitTimeout(dwm, DEFAULT_RX_TIMEOUT);
+  dwSetReceiveWaitTimeout(dwm, 0);
 
   dwCommitConfiguration(dwm);
 
@@ -466,7 +476,7 @@ static void dwm1000Init(DeckInfo *info)
 
   algoSemaphore= xSemaphoreCreateMutex();
 
-  xTaskCreate(uwbTask, LPS_DECK_TASK_NAME, 3 * configMINIMAL_STACK_SIZE, NULL,
+  xTaskCreate(uwbTask, LPS_DECK_TASK_NAME, 2*configMINIMAL_STACK_SIZE, NULL,
                     LPS_DECK_TASK_PRI, &uwbTaskHandle);
 
   isInit = true;
