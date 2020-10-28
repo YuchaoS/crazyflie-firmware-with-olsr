@@ -16,31 +16,13 @@
 #include "olsrStruct.h"
 
 
-uint16_t myAddress ;
 
-static void OLSR_SET_INIT(){
-    DEBUG_PRINT_OLSR_SYSTEM("START OLSR_SET_INIT\n");
-
-}
-static void OLSR_QUEUE_INIT(){
-    DEBUG_PRINT_OLSR_SYSTEM("OLSR_QUEUE_INIT\n");
-    olsr_send_queue_init();
-    olsr_recv_queue_init();
-}
-static void OLSR_ROUTE_TABLE_INIT(){
-    DEBUG_PRINT_OLSR_SYSTEM("OLSR_ROUTE_TABLE_INIT\n");
-}
-static void OLSR_DEV_INIT(dwDevice_t *dev){
-    device_init(dev);
-}
-static void OLSR_STRUCT_INIT(dwDevice_t *dev){
+static void olsrStructInit(dwDevice_t *dev){
     DEBUG_PRINT_OLSR_SYSTEM("START OLSR_STRUCT_INIT\n");
-    OLSR_QUEUE_INIT();
-    OLSR_DEV_INIT(dev);
-    OLSR_SET_INIT();
-    OLSR_ROUTE_TABLE_INIT();
+    olsrStructInitAll(dev);
 }
-static void OLSR_HELLO_TASK_INIT(){
+static void OLSR_HELLO_TASK_INIT()
+{
     DEBUG_PRINT_OLSR_SYSTEM("START_OLSR_HELLO_TASK_INIT\n");
     if(xTaskCreate(olsr_hello_task, "OLSR_HELLO", 5*configMINIMAL_STACK_SIZE, NULL,
                     LPS_DECK_TASK_PRI, NULL)==pdPASS){
@@ -49,7 +31,8 @@ static void OLSR_HELLO_TASK_INIT(){
                         DEBUG_PRINT_OLSR_SYSTEM("HELLO TASK CREATE FAILD\n");
                     };
 }
-static void OLSR_TC_TASK_INIT(){
+static void OLSR_TC_TASK_INIT()
+{
     DEBUG_PRINT_OLSR_SYSTEM("START_OLSR_TC_TASK_INIT\n");
     if(xTaskCreate(olsr_tc_task, "OLSR_TC", 5*configMINIMAL_STACK_SIZE, NULL,
                     LPS_DECK_TASK_PRI, NULL)==pdPASS){
@@ -58,7 +41,8 @@ static void OLSR_TC_TASK_INIT(){
                         DEBUG_PRINT_OLSR_SYSTEM("TC TASK CREATE FAILD\n");
                     };
 }
-static void OLSR_TS_TASK_INIT(){
+static void OLSR_TS_TASK_INIT()
+{
     DEBUG_PRINT_OLSR_SYSTEM("START_OLSR_TS_TASK_INIT\n");
     if(xTaskCreate(olsr_ts_task, "OLSR_TS", configMINIMAL_STACK_SIZE, NULL,
                     LPS_DECK_TASK_PRI, NULL)==pdPASS){
@@ -67,7 +51,8 @@ static void OLSR_TS_TASK_INIT(){
                         DEBUG_PRINT_OLSR_SYSTEM("TS TASK CREATE FAILD\n");
                     };
 }
-static void OLSR_SEND_TASK_INIT(dwDevice_t *dev){
+static void OLSR_SEND_TASK_INIT(dwDevice_t *dev)
+{
     DEBUG_PRINT_OLSR_SYSTEM("START_OLSR_SEND_TASK_INIT\n");
     if(xTaskCreate(olsr_send_task, "OLSR_SEND", 5*configMINIMAL_STACK_SIZE, dev,
                     LPS_DECK_TASK_PRI, NULL)==pdPASS){
@@ -76,7 +61,8 @@ static void OLSR_SEND_TASK_INIT(dwDevice_t *dev){
                         DEBUG_PRINT_OLSR_SYSTEM("SEND TASK CREATE FAILD\n");
                     };
 }
-static void OLSR_RECV_TASK_INIT(dwDevice_t *dev){
+static void OLSR_RECV_TASK_INIT(dwDevice_t *dev)
+{
     DEBUG_PRINT_OLSR_SYSTEM("START_OLSR_RECV_TASK_INIT\n");
     if(xTaskCreate(olsr_recv_task, "OLSR_RECV", 5*configMINIMAL_STACK_SIZE, dev,
                     LPS_DECK_TASK_PRI, NULL)==pdPASS){
@@ -85,7 +71,8 @@ static void OLSR_RECV_TASK_INIT(dwDevice_t *dev){
                         DEBUG_PRINT_OLSR_SYSTEM("RECV TASK CREATE FAILD\n");
                     };
 }
-static void OLSR_TASK_INIT(dwDevice_t *dev){
+static void OLSR_TASK_INIT(dwDevice_t *dev)
+{
     DEBUG_PRINT_OLSR_SYSTEM("TASK_INIT");
     OLSR_HELLO_TASK_INIT();
     OLSR_TC_TASK_INIT();
@@ -94,12 +81,11 @@ static void OLSR_TASK_INIT(dwDevice_t *dev){
     OLSR_RECV_TASK_INIT(dev);
 }
 
-static void Initialize(dwDevice_t *dev) {
+static void olsrInit(dwDevice_t *dev) 
+{
     systemWaitStart();
-    int myChanel = configblockGetRadioChannel();
-    myAddress = myChanel|0x0000;
     DEBUG_PRINT_OLSR_SYSTEM("init to new deck OLSR");
-    OLSR_STRUCT_INIT(dev);
+    olsrStructInit(dev);
     OLSR_TASK_INIT(dev);
 }
 
@@ -123,7 +109,7 @@ static uint8_t getActiveAnchorIdList(uint8_t unorderedAnchorList[], const int ma
 }
 
 uwbAlgorithm_t uwbOLSRAlgorithm = {
-  .init = Initialize,
+  .init = olsrInit,
   .isRangingOk = isRangingOk,
   .getAnchorPosition = getAnchorPosition,
   .getAnchorIdList = getAnchorIdList,

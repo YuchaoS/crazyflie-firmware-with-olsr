@@ -18,8 +18,8 @@
 
 static dwDevice_t* dwm;
 extern uint16_t myAddress;
-extern xQueueHandle olsr_send_queue;
-extern xQueueHandle olsr_recv_queue;
+extern xQueueHandle g_olsrSendQueue;
+extern xQueueHandle g_olsrRecvQueue;
 
 
 packet_t rxPacket;
@@ -59,7 +59,7 @@ void olsr_rxCallback(dwDevice_t *dev){
     u64=rxPacket.sourceAddress;
     DEBUG_PRINT_OLSR_RECEIVE("src: %X%X%X\n", u64>>32, u64, u64);
     #endif
-    xQueueSend(olsr_recv_queue,&rxPacket,portMAX_DELAY);
+    xQueueSend(g_olsrRecvQueue,&rxPacket,portMAX_DELAY);
 }
 //routing table compute
 void olsr_routing_table_compute(){
@@ -149,13 +149,13 @@ void olsr_hello_task(void *ptr){
 void olsr_send_tc_to_queue(){
     olsr_message_t t;
     olsr_generate_tc(&t);
-    xQueueSend(olsr_send_queue,&t,portMAX_DELAY);
+    xQueueSend(g_olsrSendQueue,&t,portMAX_DELAY);
     DEBUG_PRINT_OLSR_SYSTEM("TC_SEND TO QUEUE\n");
 }
 void olsr_send_ts_to_queue(){
     olsr_message_t ts_msg={0};
     olsr_generate_ts(&ts_msg);
-    xQueueSend(olsr_send_queue,&ts_msg,portMAX_DELAY);
+    xQueueSend(g_olsrSendQueue,&ts_msg,portMAX_DELAY);
     DEBUG_PRINT_OLSR_SEND("TS_SEND TO QUEUE\n");
 }
 
@@ -200,7 +200,7 @@ void olsr_send_task(void *ptr)
         has_olsr_message_cache = false;
          DEBUG_PRINT_OLSR_SEND("if1:write_position:%u\n",(unsigned int)write_position);
       }
-      while(xQueueReceive(olsr_send_queue, &olsr_message_cache, 700)){
+      while(xQueueReceive(g_olsrSendQueue, &olsr_message_cache, 700)){
         count++;
         configASSERT(olsr_message_cache.header.m_messageSize <= messageMaxSize);
         if(0==olsr_message_cache.header.m_timeTolive) break;
@@ -238,7 +238,7 @@ void olsr_recv_task(void *ptr){
     DEBUG_PRINT_OLSR_RECEIVE("RECV TASK START\n");
     static packet_t recvPacket;
     while(true){
-      while(xQueueReceive(olsr_recv_queue,&recvPacket,0)){
+      while(xQueueReceive(g_olsrRecvQueue,&recvPacket,0)){
         DEBUG_PRINT_OLSR_RECEIVE("RECV FROM QUEUE\n");
         olsr_packet_dispatch(&recvPacket);
         olsr_routing_table_compute();

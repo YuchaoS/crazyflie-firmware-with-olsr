@@ -2,6 +2,7 @@
 #define __OLSR_PACKET_H__
 
 #include "mac.h"
+#include "olsrStruct.h"
 
 /*
        0                   1                   2                   3
@@ -89,12 +90,7 @@
 #define tcAddrMaxCount (msgContMaxSize-2)/sizeof(olsr_topology_message_body_unit)
 #define timeStampMaxCount  9 //((messageMaxSize-sizeof(olsr_ts_message_hdr_t))/sizeof(olsr_ts_message_bodyunit_t))
 
-typedef enum 
-{
-    NOT_NEIGH=0,
-    SYM_NEIGH = 1,
-    MPR_NEIGH = 2,
-}neighbor_type_t;
+
 typedef struct{
     uint16_t olsr_p_length;
     uint16_t seq;
@@ -206,7 +202,7 @@ typedef enum
 } link_type_t;
 
 inline uint8_t
-olsr_link_code(link_type_t lt, neighbor_type_t nt)
+olsr_link_code(link_type_t lt, olsrNeighborType_t nt)
 {
   return ((nt & 0x3) << 2) | (lt & 0x3);
 }
@@ -217,7 +213,7 @@ olsr_link_type(uint8_t link_code)
   return link_code & 0x3;
 }
 
-inline neighbor_type_t
+inline olsrNeighborType_t
 olsr_neighbor_type(uint8_t link_code)
 {
   return (link_code >> 2) & 0x3;
