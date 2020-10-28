@@ -17,6 +17,13 @@ void olsrStructInitAll(dwDevice_t *dev);
 typedef portTickType olsrTime_t;
 typedef uint16_t olsrAddr_t;
 typedef uint16_t olsrDist_t;
+typedef uint8_t setIndex_t;
+#define TOPOLOGY_SET_SIZE 30
+#define MPR_SET_SIZE 30
+#define DUPLICATE_SET_SIZE 30
+#define TIMESTAMP_SET_SIZE 30
+#define MPR_SELECTOR_SET_SIZE 30
+#define NEIGHBOR_SET_SIZE 30
 
 typedef enum
 {
@@ -125,7 +132,53 @@ typedef struct
 } olsrRoutingTuple_t;
 
 /*
-********************Set*******************
+********************Set Define*******************
 */
+
+
+typedef struct 
+{
+  olsrTopologyTuple_t data;
+  setIndex_t next;
+} olsrTopologySetItem_t;
+
+olsrTopologySetItem_t olsrTopologySet[TOPOLOGY_SET_SIZE];
+
+typedef struct 
+{
+  olsrNeighborTuple_t data;
+  setIndex_t next;
+} olsrNeighborSetItem_t;
+
+olsrNeighborSetItem_t olsrNeighborSet[NEIGHBOR_SET_SIZE];
+
+typedef struct 
+{
+  olsrDuplicateTuple_t data;
+  setIndex_t next;
+} olsrDuplicateSetItem_t;
+
+olsrDuplicateSetItem_t olsrDuplicateSet[DUPLICATE_SET_SIZE];
+
+typedef struct 
+{
+  olsrMprTuple_t data;
+  setIndex_t next;
+} olsrMprSetItem_t;
+
+olsrMprSetItem_t olsrMprSet[MPR_SET_SIZE];
+
+typedef struct 
+{
+  olsrTimestampTuple_t data;
+  setIndex_t next;
+} olsrTimestampSetItem_t;
+
+olsrTimestampSetItem_t olsrTimestampSet[TIMESTAMP_SET_SIZE];
+
+
+
+
+
 
 #endif //__OLSR_STRUCT_H__
