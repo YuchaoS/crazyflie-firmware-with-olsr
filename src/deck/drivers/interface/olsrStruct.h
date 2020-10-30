@@ -17,7 +17,18 @@ void olsrStructInitAll(dwDevice_t *dev);
 typedef portTickType olsrTime_t;
 typedef uint16_t olsrAddr_t;
 typedef uint16_t olsrDist_t;
-typedef uint8_t setIndex_t;
+typedef short setIndex_t;
+
+#define OLSR_SETS_NUM 7
+#define TOPOLOGY_SET_T 0
+#define MPR_SET_T 1
+#define NEIGHBOR_SET_T 2
+#define DUPLICATE_SET_T 3
+#define MPR_SELECT_SET_T 4
+#define TWO_HOP_NEIGHBOR_SET_T 5
+#define TIMESTAMP_SET_T 6
+
+
 #define TOPOLOGY_SET_SIZE 30
 #define MPR_SET_SIZE 30
 #define DUPLICATE_SET_SIZE 30
@@ -167,6 +178,15 @@ typedef struct
 } olsrMprSetItem_t;
 
 olsrMprSetItem_t olsrMprSet[MPR_SET_SIZE];
+
+typedef struct 
+{
+  olsrMprSelectorTuple_t data;
+  setIndex_t next;
+} olsrMprSelectorSetItem_t;
+
+olsrMprSelectorSetItem_t olsrMprSelectorSet[MPR_SELECTOR_SET_SIZE];
+
 
 typedef struct 
 {
