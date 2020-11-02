@@ -21,10 +21,10 @@ static void olsrStructInit(dwDevice_t *dev){
     DEBUG_PRINT_OLSR_SYSTEM("START OLSR_STRUCT_INIT\n");
     olsrStructInitAll(dev);
 }
-static void OLSR_HELLO_TASK_INIT()
+static void olsrHelloTaskInit()
 {
     DEBUG_PRINT_OLSR_SYSTEM("START_OLSR_HELLO_TASK_INIT\n");
-    if(xTaskCreate(olsr_hello_task, "OLSR_HELLO", 5*configMINIMAL_STACK_SIZE, NULL,
+    if(xTaskCreate(olsrHelloTask, "OLSR_HELLO", 5*configMINIMAL_STACK_SIZE, NULL,
                     LPS_DECK_TASK_PRI, NULL)==pdPASS){
                         DEBUG_PRINT_OLSR_SYSTEM("HELLO TASK CREATE SUCCESSFUL\n");
                     }else{
@@ -71,10 +71,10 @@ static void OLSR_RECV_TASK_INIT(dwDevice_t *dev)
                         DEBUG_PRINT_OLSR_SYSTEM("RECV TASK CREATE FAILD\n");
                     };
 }
-static void OLSR_TASK_INIT(dwDevice_t *dev)
+static void olsrTaskInit(dwDevice_t *dev)
 {
     DEBUG_PRINT_OLSR_SYSTEM("TASK_INIT");
-    OLSR_HELLO_TASK_INIT();
+    olsrHelloTaskInit();
     OLSR_TC_TASK_INIT();
     OLSR_TS_TASK_INIT();
     OLSR_SEND_TASK_INIT(dev);
@@ -86,7 +86,7 @@ static void olsrInit(dwDevice_t *dev)
     systemWaitStart();
     DEBUG_PRINT_OLSR_SYSTEM("init to new deck OLSR");
     olsrStructInit(dev);
-    OLSR_TASK_INIT(dev);
+    olsrTaskInit(dev);
 }
 
 static bool isRangingOk()

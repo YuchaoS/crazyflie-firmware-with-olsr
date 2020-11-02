@@ -148,7 +148,7 @@ static void txCallback(dwDevice_t *dev)
 
 static void rxCallback(dwDevice_t *dev)
 {
-  olsr_rxCallback(dev);
+  olsrRxCallback(dev);
 
 }
 

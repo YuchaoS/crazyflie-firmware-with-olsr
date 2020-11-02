@@ -83,140 +83,140 @@
                (etc.)
  */
 
-#define maxPacketLength 125 //got this value by testing
-#define payLoadMaxSize 104 //(maxPacketLength-MAC802154_HEADER_LENGTH)
-#define messageMaxSize 100 //(payLoadMaxSize-sizeof(olsr_packet_hdr_t))
-#define msgContMaxSize  84 //(messageMaxSize-sizeof(olsr_message_hdr_t))
-#define tcAddrMaxCount (msgContMaxSize-2)/sizeof(olsr_topology_message_body_unit)
-#define timeStampMaxCount  9 //((messageMaxSize-sizeof(olsr_ts_message_hdr_t))/sizeof(olsr_ts_message_bodyunit_t))
-
-
-typedef struct{
-    uint16_t olsr_p_length;
-    uint16_t seq;
-} __attribute__((packed)) olsr_packet_hdr_t;//4
+#define PACKET_MAX_LENGTH 125 //got this value by testing
+#define PACKET_PAYLOAD_MAX_SIZE 104 //(maxPacketLength-MAC802154_HEADER_LENGTH)
+#define MESSAGE_MAX_LENGTH 100 //(payLoadMaxSize-sizeof(olsr_packet_hdr_t))
+#define MESSAGE_PAYLOAD_MAX_SIZE  84 //(messageMaxSize-sizeof(olsr_message_hdr_t))
+#define LINK_ADDRESS_MAX_NUM 10
+#define LINK_MESSAGE_MAX_NUM ((MESSAGE_PAYLOAD_MAX_SIZE-sizeof(olsrHelloMessageHeader_t))\
+                              /sizeof(olsrLinkMessage_t))
 
 typedef struct{
-    olsr_packet_hdr_t header;
-    uint8_t content[messageMaxSize]; 
+    uint16_t m_packetLength;
+    uint16_t m_packetSeq;
+} __attribute__((packed)) olsrPacketHeader_t;//4
+
+typedef struct{
+    olsrPacketHeader_t m_packetHeader;
+    uint8_t m_packetPayload[PACKET_PAYLOAD_MAX_SIZE]; 
     //int content_size;
-} __attribute__((packed)) olsr_packet_t;
+} __attribute__((packed)) olsrPacket_t;
 
 typedef enum{
     HELLO_MESSAGE = 1,
     TC_MESSAGE = 2,
     DATA_MESSAGE = 3,
     TS_MESSAGE= 4,
-} message_type_t;
+} olsrMessageType_t;
 //1
 typedef struct{
-   message_type_t m_messageType;
-   uint8_t m_vtime;
+   olsrMessageType_t m_messageType;
+   uint8_t m_vTime; //The validity time.
    uint16_t m_messageSize;
-   uint16_t sourceAddr;
-   uint16_t midAddr;
-   uint16_t destAddr;
-   uint16_t reserved;
-   uint8_t m_timeTolive;
+   olsrAddr_t m_originatorAddress;
+   olsrAddr_t m_relayAddress;
+   olsrAddr_t m_destinationAddress;
+   uint16_t m_reserved;
+   uint8_t m_timeToLive;
    uint8_t m_hopCount;
    uint16_t m_messageSeq;
-} __attribute__((packed)) olsr_message_hdr_t; //16bytes
+} __attribute__((packed)) olsrMessageHeader_t; //16bytes
 
 //message 
 typedef struct
 {
-    olsr_message_hdr_t header;
-    uint8_t content[messageMaxSize-sizeof(olsr_message_hdr_t)];
+    olsrMessageHeader_t m_messageHeader;
+    uint8_t m_messagePayload[MESSAGE_MAX_LENGTH-sizeof(olsrMessageHeader_t)];
     //int content_size;
-} __attribute__((packed)) olsr_message_t;
+} __attribute__((packed)) olsrMessage_t;
 
 //hello message
 typedef struct{
-    uint16_t reserved;
-    uint8_t Htime;
-    uint8_t willingness;
-} __attribute__((packed)) olsr_hello_message_hdr_t;
+    uint16_t m_helloMessageSize;
+    uint8_t m_Htime;
+    uint8_t m_willingness;
+} __attribute__((packed)) olsrHelloMessageHeader_t;//4bytes
 
 typedef struct{
-    uint8_t link_code;
-    uint8_t reserved;
-    uint16_t size;
-} __attribute__((packed)) olsr_link_message_hdr_t;
+    uint8_t m_linkCode;
+    uint8_t m_reserved;
+    uint16_t m_addressUsedSize;
+    olsrAddr_t m_addresses[LINK_ADDRESS_MAX_NUM];
+} __attribute__((packed)) olsrLinkMessage_t; //4+2*10bytes
 
 typedef struct{
-    olsr_hello_message_hdr_t  hello_header;
-    olsr_link_message_hdr_t   link_header;
-    uint16_t address[10];
-} __attribute__((packed)) olsr_hello_message_t;
+    olsrHelloMessageHeader_t  m_helloHeader;
+    olsrLinkMessage_t m_linkMessage[LINK_MESSAGE_MAX_NUM];
+} __attribute__((packed)) olsrHeloMessage_t;
 
 //tc
-typedef struct 
-{
-    /* data */
-    uint16_t address;
-    #ifdef DIS_OLSR
-    uint16_t distance;
-    #endif
-} __attribute__((packed)) olsr_topology_message_body_unit;
+// typedef struct 
+// {
+//     /* data */
+//     uint16_t address;
+//     #ifdef DIS_OLSR
+//     uint16_t distance;
+//     #endif
+// } __attribute__((packed)) olsr_topology_message_body_unit;
 
-typedef struct 
-{
-    /* data */
-    uint16_t ansn;
-    //42
-    olsr_topology_message_body_unit content[tcAddrMaxCount];
-} __attribute__((packed)) olsr_topology_message_t;
-
-
-//time stamp (ts) message
-typedef struct{
-   message_type_t m_messageType;
-   uint8_t dwtime_high8;
-   uint16_t m_messageSize;
-   uint16_t sourceAddr;
-   uint16_t m_messageSeq;
-   uint16_t velocity;//in cm
-   uint32_t dwtime_low32;
-} __attribute__((packed)) olsr_ts_message_hdr_t; //14
-
-typedef struct { 
-   uint16_t tsAddr;
-   uint16_t m_messageSeq;
-   uint32_t dwtime_low32;
-   uint8_t dwtime_high8;
-} __attribute__((packed)) olsr_ts_message_bodyunit_t;//9
-
-typedef struct {
-    olsr_ts_message_hdr_t ts_header;
-    olsr_ts_message_bodyunit_t content[timeStampMaxCount];
-} __attribute__((packed)) olsr_ts_message_t;
+// typedef struct 
+// {
+//     /* data */
+//     uint16_t ansn;
+//     //42
+//     olsr_topology_message_body_unit content[tcAddrMaxCount];
+// } __attribute__((packed)) olsr_topology_message_t;
 
 
-//link type
-typedef enum
-{
-  UNSPEC_LINK = 0,
-  ASYM_LINK   = 1,
-  SYM_LINK    = 2,
-  LOST_LINK   = 3,
-} link_type_t;
+// //time stamp (ts) message
+// typedef struct{
+//    message_type_t m_messageType;
+//    uint8_t dwtime_high8;
+//    uint16_t m_messageSize;
+//    uint16_t sourceAddr;
+//    uint16_t m_messageSeq;
+//    uint16_t velocity;//in cm
+//    uint32_t dwtime_low32;
+// } __attribute__((packed)) olsr_ts_message_hdr_t; //14
 
-inline uint8_t
-olsr_link_code(link_type_t lt, olsrNeighborType_t nt)
-{
-  return ((nt & 0x3) << 2) | (lt & 0x3);
-}
+// typedef struct { 
+//    uint16_t tsAddr;
+//    uint16_t m_messageSeq;
+//    uint32_t dwtime_low32;
+//    uint8_t dwtime_high8;
+// } __attribute__((packed)) olsr_ts_message_bodyunit_t;//9
 
-inline link_type_t
-olsr_link_type(uint8_t link_code)
-{
-  return link_code & 0x3;
-}
+// typedef struct {
+//     olsr_ts_message_hdr_t ts_header;
+//     olsr_ts_message_bodyunit_t content[timeStampMaxCount];
+// } __attribute__((packed)) olsr_ts_message_t;
 
-inline olsrNeighborType_t
-olsr_neighbor_type(uint8_t link_code)
-{
-  return (link_code >> 2) & 0x3;
-}
+
+// //link type
+// typedef enum
+// {
+//   UNSPEC_LINK = 0,
+//   ASYM_LINK   = 1,
+//   SYM_LINK    = 2,
+//   LOST_LINK   = 3,
+// } link_type_t;
+
+// inline uint8_t
+// olsr_link_code(link_type_t lt, olsrNeighborType_t nt)
+// {
+//   return ((nt & 0x3) << 2) | (lt & 0x3);
+// }
+
+// inline link_type_t
+// olsr_link_type(uint8_t link_code)
+// {
+//   return link_code & 0x3;
+// }
+
+// inline olsrNeighborType_t
+// olsr_neighbor_type(uint8_t link_code)
+// {
+//   return (link_code >> 2) & 0x3;
+// }
 
 #endif //__OLSR_PACKET_H__

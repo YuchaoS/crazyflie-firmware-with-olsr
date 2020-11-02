@@ -12,7 +12,8 @@
 
 //const
 
-#define HELLO_INTERVAL 2000
+#define OLSR_HELLO_INTERVAL 2000
+#define OLSR_NEIGHB_HOLD_TIME 3*OLSR_HELLO_INTERVAL
 #define TC_INTERVAL 500
 #define TS_INTERVAL 1000
 
@@ -20,7 +21,7 @@ static dwDevice_t* dwm;
 extern uint16_t myAddress;
 extern xQueueHandle g_olsrSendQueue;
 extern xQueueHandle g_olsrRecvQueue;
-
+static 
 
 packet_t rxPacket;
 //TODO define packet and message struct once, save space
@@ -32,7 +33,7 @@ packet_t rxPacket;
 void device_init(dwDevice_t *dev){
     dwm = dev;
 }
-void olsr_rxCallback(dwDevice_t *dev){
+void olsrRxCallback(dwDevice_t *dev){
     DEBUG_PRINT_OLSR_SYSTEM("rxCallBack\n");
     int dataLength = dwGetDataLength(dwm);
     if(dataLength==0){
@@ -128,8 +129,14 @@ void olsr_generate_ts(olsr_message_t *ts_msg)
 {
 }
 
-void olsr_generate_hello(olsr_message_t *hello_message)
+void olsrSendHello()
 {
+  olsrMessage_t helloMessage;
+  helloMessage.m_messageHeader.m_originatorAddress = myAddress;
+  helloMessage.m_messageHeader.m_messageType = HELLO_MESSAGE;
+  helloMessage.m_messageHeader.m_destinationAddress = 
+  helloMessage.m_messageHeader.m_vTime = OLSR_NEIGHB_HOLD_TIME;
+  helloMessage.m_messageHeader.m_hopCount = 0;
 }
 static void olsr_generate_tc(olsr_message_t *tc_message){
   //write header
@@ -138,11 +145,12 @@ static void olsr_generate_tc(olsr_message_t *tc_message){
 //process hello
 
 // all task defination
-void olsr_hello_task(void *ptr){
+void olsrHelloTask(void *ptr){
     while (true)
     {
         /* code */
         DEBUG_PRINT_OLSR_SEND("HELLO_SEND TO QUEUE\n");
+        olsrSendHello();
         vTaskDelay(M2T(HELLO_INTERVAL));
     }
 }

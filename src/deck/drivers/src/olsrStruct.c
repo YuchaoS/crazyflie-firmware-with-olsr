@@ -88,7 +88,7 @@ static bool olsrTopologySetFree(setIndex_t delItem)
     }
   else 
     {
-      while(-1==pre)
+      while(pre!=-1)
         {
           if(olsrTopologySet[pre].next==delItem)
             {
@@ -109,7 +109,27 @@ static bool olsrTopologySetFree(setIndex_t delItem)
 
 bool olsrInsertToTopologySet(olsrTopologyTuple_t *tcTuple)
 {
-  
+  if(tcTuple==NULL) return false;
+  setIndex_t candidate = olsrTopologySetMalloc(); 
+  if(candidate == -1) return false;
+  olsrTopologySet[candidate].data.m_destAddr = tcTuple->m_destAddr;
+  olsrTopologySet[candidate].data.m_distance = tcTuple->m_distance;
+  olsrTopologySet[candidate].data.m_expirationTime = tcTuple->m_expirationTime;
+  olsrTopologySet[candidate].data.m_lastAddr = tcTuple->m_lastAddr;
+  return true;
+}
+
+void olsrPrintTopologySet()
+{
+  setIndex_t pre = olsrSetIndexEntry[TOPOLOGY_SET_T][FULL_ENTRY];
+  while(pre!=-1)
+    {
+      DEBUG_PRINT_OLSR_SET("%d : destAddr:%u lastAddr:%u distance:%d\n",pre,\
+                            olsrTopologySet[pre].data.m_destAddr,\
+                            olsrTopologySet[pre].data.m_lastAddr,\
+                            olsrTopologySet[pre].data.m_distance);
+      pre =  olsrTopologySet[pre].next;
+    }
 }
 static void olsrSetEntryInit()
 {

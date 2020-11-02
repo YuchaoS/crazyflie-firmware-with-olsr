@@ -16,7 +16,7 @@ void olsrStructInitAll(dwDevice_t *dev);
 */
 typedef portTickType olsrTime_t;
 typedef uint16_t olsrAddr_t;
-typedef uint16_t olsrDist_t;
+typedef short olsrDist_t;
 typedef short setIndex_t;
 
 #define OLSR_SETS_NUM 7
@@ -197,7 +197,7 @@ typedef struct
 olsrTimestampSetItem_t olsrTimestampSet[TIMESTAMP_SET_SIZE];
 
 
-
+bool olsrInsertToTopologySet(olsrTopologyTuple_t *tcTuple);
 
 
 
