@@ -21,8 +21,8 @@ static dwDevice_t* dwm;
 extern uint16_t myAddress;
 extern xQueueHandle g_olsrSendQueue;
 extern xQueueHandle g_olsrRecvQueue;
-static 
-
+static uint16_t g_staticMessageSeq = 0;
+static SemaphoreHandle_t olsrMessageSeqLock;
 packet_t rxPacket;
 //TODO define packet and message struct once, save space
 //debugging, to be deleted
@@ -31,7 +31,15 @@ packet_t rxPacket;
 
 //rxcallback
 void device_init(dwDevice_t *dev){
-    dwm = dev;
+  dwm = dev;
+  olsrMessageSeqLock = xSemaphoreCreateMutex();
+}
+static uint16_t getSeqNumber()
+{
+  xSemaphoreTake(olsrMessageSeqLock,portMAX_DELAY);
+  uint16_t retVal = g_staticMessageSeq++;
+  xSemaphoreGive(olsrMessageSeqLock);
+  return retVal;
 }
 void olsrRxCallback(dwDevice_t *dev){
     DEBUG_PRINT_OLSR_SYSTEM("rxCallBack\n");
@@ -132,11 +140,32 @@ void olsr_generate_ts(olsr_message_t *ts_msg)
 void olsrSendHello()
 {
   olsrMessage_t helloMessage;
-  helloMessage.m_messageHeader.m_originatorAddress = myAddress;
+  //message header initial
   helloMessage.m_messageHeader.m_messageType = HELLO_MESSAGE;
-  helloMessage.m_messageHeader.m_destinationAddress = 
   helloMessage.m_messageHeader.m_vTime = OLSR_NEIGHB_HOLD_TIME;
+  helloMessage.m_messageSize = sizeof(olsrMessageHeader_t);
+  helloMessage.m_messageHeader.m_originatorAddress = myAddress;
+  helloMessage.m_messageHeader.m_destinationAddress = 0;
+  helloMessage.m_messageHeader.m_relayAddress = 0;  
+  helloMessage.m_messageHeader.m_timeToLive = 0xff;
   helloMessage.m_messageHeader.m_hopCount = 0;
+  helloMessage.m_messageHeader.m_messageSeq = getSeqNumber();
+  olsrHelloMessageHeader_t helloMessageHeader;
+  helloMessageHeader.m_hTime = HELLO_INTERVAL;
+  helloMessageHeader.m_willingness = WILL_ALWAYS;
+
+  //loop
+  setIndex_t linkTupleIndex = olsrSetIndexEntry[LINK_SET_T][FULL_ENTRY];
+  portTickType now;
+  while(linkTupleIndex!=-1)
+    {
+      if(!(olsrLinkSet[linkTupleIndex].data.m_localAddr == myAddress &&\
+      olsrLinkSet[linkTupleIndex].data.m_expirationTime>))
+        {
+
+        }
+    }
+
 }
 static void olsr_generate_tc(olsr_message_t *tc_message){
   //write header

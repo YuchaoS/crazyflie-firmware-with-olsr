@@ -132,8 +132,8 @@ typedef struct
 
 //hello message
 typedef struct{
-    uint16_t m_helloMessageSize;
-    uint8_t m_Htime;
+    uint16_t m_reserved;
+    uint8_t m_hTime;
     uint8_t m_willingness;
 } __attribute__((packed)) olsrHelloMessageHeader_t;//4bytes
 

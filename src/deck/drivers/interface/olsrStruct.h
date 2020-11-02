@@ -19,7 +19,7 @@ typedef uint16_t olsrAddr_t;
 typedef short olsrDist_t;
 typedef short setIndex_t;
 
-#define OLSR_SETS_NUM 7
+#define OLSR_SETS_NUM 8
 #define TOPOLOGY_SET_T 0
 #define MPR_SET_T 1
 #define NEIGHBOR_SET_T 2
@@ -27,15 +27,19 @@ typedef short setIndex_t;
 #define MPR_SELECT_SET_T 4
 #define TWO_HOP_NEIGHBOR_SET_T 5
 #define TIMESTAMP_SET_T 6
+#define LINK_SET_T 7
 
 
 #define TOPOLOGY_SET_SIZE 30
+#define LINK_SET_SIZE 30
 #define MPR_SET_SIZE 30
 #define DUPLICATE_SET_SIZE 30
 #define TIMESTAMP_SET_SIZE 30
 #define MPR_SELECTOR_SET_SIZE 30
 #define NEIGHBOR_SET_SIZE 30
 
+#define FREE_ENTRY 0
+#define FULL_ENTRY 1
 typedef enum
 {
   WILL_NEVER   = 0,
@@ -77,7 +81,9 @@ typedef struct
 {
   olsrAddr_t m_localAddr;
   olsrAddr_t m_neighborAddr;
+  /// The link is considered bidirectional until this time.
   olsrTime_t m_symTime;
+  /// The link is considered unidirectional until this time.
   olsrTime_t m_asymTime;
   olsrTime_t m_expirationTime;
 } olsrLinkTuple_t;
@@ -143,9 +149,9 @@ typedef struct
 } olsrRoutingTuple_t;
 
 /*
-********************Set Define*******************
+********************Set Definition*******************
 */
-
+setIndex_t olsrSetIndexEntry[OLSR_SETS_NUM][2]; 
 
 typedef struct 
 {
@@ -154,6 +160,14 @@ typedef struct
 } olsrTopologySetItem_t;
 
 olsrTopologySetItem_t olsrTopologySet[TOPOLOGY_SET_SIZE];
+
+typedef struct 
+{
+  olsrLinkTuple_t data;
+  setIndex_t next;
+} olsrLinkSetItem_t;
+
+olsrLinkSetItem_t olsrLinkSet[LINK_SET_SIZE];
 
 typedef struct 
 {
