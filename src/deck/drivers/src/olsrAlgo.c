@@ -155,24 +155,27 @@ void olsr_generate_ts(olsr_message_t *ts_msg)
 
 void olsrSendHello()
 {
-  olsrMessage_t helloMessage;
+  olsrMessage_t msg;
   //message header initial
-  helloMessage.m_messageHeader.m_messageType = HELLO_MESSAGE;
-  helloMessage.m_messageHeader.m_vTime = OLSR_NEIGHB_HOLD_TIME;
-  helloMessage.m_messageSize = sizeof(olsrMessageHeader_t);
-  helloMessage.m_messageHeader.m_originatorAddress = myAddress;
-  helloMessage.m_messageHeader.m_destinationAddress = 0;
-  helloMessage.m_messageHeader.m_relayAddress = 0;  
-  helloMessage.m_messageHeader.m_timeToLive = 0xff;
-  helloMessage.m_messageHeader.m_hopCount = 0;
-  helloMessage.m_messageHeader.m_messageSeq = getSeqNumber();
-  olsrHelloMessageHeader_t helloMessageHeader;
-  helloMessageHeader.m_hTime = HELLO_INTERVAL;
-  helloMessageHeader.m_willingness = WILL_ALWAYS;
+  msg.m_messageHeader.m_messageType = HELLO_MESSAGE;
+  msg.m_messageHeader.m_vTime = OLSR_NEIGHB_HOLD_TIME;
+  msg.m_messageSize = sizeof(olsrMessageHeader_t);
+  msg.m_messageHeader.m_originatorAddress = myAddress;
+  msg.m_messageHeader.m_destinationAddress = 0;
+  msg.m_messageHeader.m_relayAddress = 0;  
+  msg.m_messageHeader.m_timeToLive = 0xff;
+  msg.m_messageHeader.m_hopCount = 0;
+  msg.m_messageHeader.m_messageSeq = getSeqNumber();
+  //hello message
+  olsrHeloMessage_t helloMessage;
+  helloMessage.m_helloHeader.m_hTime = HELLO_INTERVAL; //hello's header on packet
+  helloMessage.m_helloHeader.m_willingness = WILL_ALWAYS;
+  helloMessage.m_helloHeader.m_linkMessageNumber = 0;
 
   //loop
   setIndex_t linkTupleIndex = olsrSetIndexEntry[LINK_SET_T][FULL_ENTRY];
   olsrTime_t now = xTaskGetTickCount();
+  
   while(linkTupleIndex!=-1)
     {
       if(!(olsrLinkSet[linkTupleIndex].data.m_localAddr == myAddress &&\
@@ -182,6 +185,7 @@ void olsrSendHello()
           continue;
         }
       uint8_t linkType, nbType = 0xff;
+
       if(olsrLinkSet[linkTupleIndex].data.m_symTime>=now)
         {
           linkType = OLSR_SYM_LINK;//2
@@ -200,10 +204,44 @@ void olsrSendHello()
         }
       else
         {
-          
+          bool ok = false;
+          setIndex_t neighborTupleIndex = olsrSetIndexEntry[NEIGHBOR_SET_T][FULL_ENTRY];
+          while(neighborTupleIndex!=-1)
+            {
+              if(olsrNeighborSet[neighborTupleIndex].data.m_neighborAddr ==\
+              olsrLinkSet[linkTupleIndex].data.m_localAddr) // this linkTuple Addr is in NighborSet
+                {
+                  if(olsrNeighborSet[neighborTupleIndex].data.m_status == STATUS_SYM)
+                    {
+                      nbType = OLSR_SYM_NEIGH; //is a sym neighbor
+                    }
+                  else if(olsrNeighborSet[neighborTupleIndex].data.m_status == STATUS_NOT_SYM)
+                    {
+                      nbType = OLSR_NOT_NEIGH; // is not a sym neghbor
+                    }
+                  else
+                    {
+                      DEBUG_PRINT_OLSR_HELLO("There is a neighbor tuple with an unknown status!\n");
+                    }
+                  ok = true;
+                  break;
+                }
+            }
+          if(!ok)
+            {
+              linkTupleIndex = olsrLinkSet[linkTupleIndex].next;
+              continue;
+            }
         }
-      
+          olsrLinkMessage_t linkMessage;
+          linkMessage.m_linkCode = (linkType & 0x03) | ((nbType << 2) & 0x0f);
+          linkMessage.m_addressUsedSize = 1;
+          linkMessage.m_addresses = olsrLinkSet[linkTupleIndex].data.m_neighborAddr;
+          if(helloMessage.m_helloHeader.m_linkMessageNumber==LINK_MESSAGE_MAX_NUM) break;
+          helloMessage.m_linkMessage[helloMessage.m_helloHeader.m_linkMessageNumber++] = linkMessage;
+          linkTupleIndex = olsrLinkSet[linkTupleIndex].next;
     }
+  memcpy(msg.m_messagePayload,&helloMessage,helloMessage.m_helloHeader)
 
 }
 static void olsr_generate_tc(olsr_message_t *tc_message){
