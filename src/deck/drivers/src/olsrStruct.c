@@ -365,7 +365,21 @@ static bool olsrMprSetFree(setIndex_t delItem)
     return false;
 }
 
-
+bool olsrFindMprByAddr(olsrAddr_t addr)
+{
+  bool isFound = false;
+  setIndex_t it = olsrSetIndexEntry[MPR_SET_T][FULL_ENTRY];
+  while(it!=-1)
+    {
+      if(olsrMprSet[it].data.m_addr==addr)
+        {
+          isFound = true;
+          break;
+        }
+      it = olsrMprSet[it].next;
+    }
+  return isFound;
+}
 
 
 

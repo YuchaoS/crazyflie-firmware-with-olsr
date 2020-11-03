@@ -17,6 +17,22 @@
 #define TC_INTERVAL 500
 #define TS_INTERVAL 1000
 
+/// Unspecified link type.
+#define OLSR_UNSPEC_LINK        0
+/// Asymmetric link type.
+#define OLSR_ASYM_LINK          1
+/// Symmetric link type.
+#define OLSR_SYM_LINK           2
+/// Lost link type.
+#define OLSR_LOST_LINK          3
+
+/// Not neighbor type.
+#define OLSR_NOT_NEIGH          0
+/// Symmetric neighbor type.
+#define OLSR_SYM_NEIGH          1
+/// Asymmetric neighbor type.
+#define OLSR_MPR_NEIGH          2
+
 static dwDevice_t* dwm;
 extern uint16_t myAddress;
 extern xQueueHandle g_olsrSendQueue;
@@ -156,14 +172,37 @@ void olsrSendHello()
 
   //loop
   setIndex_t linkTupleIndex = olsrSetIndexEntry[LINK_SET_T][FULL_ENTRY];
-  portTickType now;
+  olsrTime_t now = xTaskGetTickCount();
   while(linkTupleIndex!=-1)
     {
       if(!(olsrLinkSet[linkTupleIndex].data.m_localAddr == myAddress &&\
-      olsrLinkSet[linkTupleIndex].data.m_expirationTime>))
+      olsrLinkSet[linkTupleIndex].data.m_expirationTime >= now))
         {
-
+          linkTupleIndex = olsrLinkSet[linkTupleIndex].next;
+          continue;
         }
+      uint8_t linkType, nbType = 0xff;
+      if(olsrLinkSet[linkTupleIndex].data.m_symTime>=now)
+        {
+          linkType = OLSR_SYM_LINK;//2
+        }
+      else if(olsrLinkSet[linkTupleIndex].data.m_asymTime>=now)
+        {
+          linkType = OLSR_ASYM_LINK;//1
+        }
+      else
+        {
+          linkType = OLSR_LOST_LINK;//3
+        }
+      if(olsrFindMprByAddr(olsrLinkSet[linkTupleIndex].data.m_localAddr))
+        {
+           nb_type = OLSR_MPR_NEIGH;//2
+        }
+      else
+        {
+          
+        }
+      
     }
 
 }

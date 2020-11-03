@@ -51,9 +51,8 @@ typedef enum
 
 typedef enum 
 {
-  NOT_NEIGH=0,
-  SYM_NEIGH = 1,
-  MPR_NEIGH = 2,
+  STATUS_NOT_SYM = 0,
+  STATUS_SYM = 1,
 } olsrNeighborType_t;
 
 typedef struct
