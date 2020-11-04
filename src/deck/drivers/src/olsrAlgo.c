@@ -241,8 +241,11 @@ void olsrSendHello()
           helloMessage.m_linkMessage[helloMessage.m_helloHeader.m_linkMessageNumber++] = linkMessage;
           linkTupleIndex = olsrLinkSet[linkTupleIndex].next;
     }
-  memcpy(msg.m_messagePayload,&helloMessage,helloMessage.m_helloHeader)
-
+  uint16_t writeSize = sizeof(olsrHelloMessageHeader_t)+helloMessage.m_helloHeader.m_linkMessageNumber*\
+                       sizeof(olsrLinkMessage_t);
+  msg.m_messageSize +=  writeSize;                 
+  memcpy(msg.m_messagePayload,&helloMessage,writeSize);
+  xQueueSend(g_olsrSendQueue,&msg,portMAX_DELAY);
 }
 static void olsr_generate_tc(olsr_message_t *tc_message){
   //write header
@@ -294,17 +297,17 @@ void olsr_send_task(void *ptr)
     //pointer initialize
     packet_t dwpacket = {0};
     bool has_olsr_message_cache =false;
-    olsr_message_t olsr_message_cache = {0};
+    olsrMessage_t olsr_message_cache = {0};
   	MAC80215_PACKET_INIT(dwpacket, MAC802154_TYPE_OLSR)
     dwm = (dwDevice_t *)ptr;
-    olsr_packet_t *olsr_packet = (olsr_packet_t *)dwpacket.payload;
-    olsr_message_t *messages;
+    olsrPacket_t *olsr_packet = (olsrPacket_t *)dwpacket.payload;
+    olsrMessage_t *messages;
     //task loop
     DEBUG_PRINT_OLSR_SEND("top:dwpacket:%u\n",(unsigned int)&dwpacket);
     DEBUG_PRINT_OLSR_SEND("top:olsr_packet:%u\n",(unsigned int)olsr_packet);
     int count = 0;
     while(true){
-      messages = (olsr_message_t *)olsr_packet->content;
+      messages = (olsrMessage_t *)olsr_packet->content;
       uint8_t *write_position = (uint8_t *)messages;
       DEBUG_PRINT_OLSR_SEND("top:write_position:%u\n",(unsigned int)write_position);
       if(has_olsr_message_cache){
@@ -329,7 +332,7 @@ void olsr_send_task(void *ptr)
         }
       }
       DEBUG_PRINT_OLSR_SEND("continue:write_position:%u\n",(unsigned int)(write_position-(uint8_t *)olsr_packet));
-      if(write_position-(uint8_t *)olsr_packet==sizeof(olsr_packet_hdr_t)) {
+      if(write_position-(uint8_t *)olsr_packet==sizeof(olsrPacketHeader_t)) {
         vTaskDelay(20);
         continue;
       }
