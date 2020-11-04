@@ -278,9 +278,13 @@ static void uwbTask(void* parameters) {
   systemWaitStart();
   algorithm->init(dwm);
   while(1){
-
-    dwHandleInterrupt(dwm);
-    vTaskDelay(100);
+    if (ulTaskNotifyTake(pdTRUE, timeout / portTICK_PERIOD_MS) > 0) {
+      do{
+        dwHandleInterrupt(dwm);
+      } while(digitalRead(GPIO_PIN_IRQ) != 0);
+    } 
+    // dwHandleInterrupt(dwm);
+    // vTaskDelay(100);
     // xSemaphoreTake(algoSemaphore, portMAX_DELAY);
     // handleModeSwitch();
     // xSemaphoreGive(algoSemaphore);

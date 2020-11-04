@@ -104,32 +104,35 @@ void olsr_ts_process(const olsr_message_t* ts_msg){
 //
 
 //switch to tc|hello|ts process
-void olsr_packet_dispatch
-(const packet_t* rxPacket){
-    DEBUG_PRINT_OLSR_SYSTEM("PACKET_DISPATCH\n");  
-    olsr_packet_t* olsr_packet = (olsr_packet_t *)rxPacket->payload;
-    //need to add a condition whether recvive a packet from self
-    uint16_t olsr_packet_sz = olsr_packet->header.olsr_p_length;
-    uint16_t index = sizeof(olsr_packet_hdr_t);
-    uint8_t* olsr_message_idx = olsr_packet->content;
-    olsr_message_t* olsr_message = (olsr_message_t*)olsr_message_idx;
-    DEBUG_PRINT_OLSR_RECEIVE("RECV PACKET LEN: %d\n", olsr_packet_sz);  
-    while(index<olsr_packet_sz){
-        olsr_message_hdr_t* olsr_message_header = (olsr_message_hdr_t*)olsr_message;
-        message_type_t m_type = olsr_message_header->m_messageType;
+void olsr_packet_dispatch(const packet_t* rxPacket)
+{
+  DEBUG_PRINT_OLSR_SYSTEM("PACKET_DISPATCH\n");  
+  olsrPacket_t* olsrPacket = (olsrPacket_t *)rxPacket->payload;
+  //need to add a condition whether recvive a packet from self
+  uint16_t packetSize = olsrPacket->m_packetHeader.m_packetLength;
+  uint16_t index = sizeof(olsrPacketHeader_t);
+  uint8_t* olsrMessageIdx = olsrPacket->m_packetPayload;
+  olsrMessage_t* olsrMessage = (olsrMessage_t*)olsrMessageIdx;
+  DEBUG_PRINT_OLSR_RECEIVE("RECV PACKET LEN: %d\n", packetSize);  
+  while(index<packetSize)
+    {
+      olsrMessageHeader_t* messageHeader = (olsrMessageHeader_t*)olsrMessage;
+      olsrMessageType_t type = messageHeader->m_messageType;
 				#ifdef DEBUG_OLSR_RECEIVE
-        DEBUG_PRINT_OLSR_RECEIVE("HDR size\t%d\n", olsr_message_header->m_messageSize);
-        DEBUG_PRINT_OLSR_RECEIVE("HDR seq\t%d\n", olsr_message_header->m_messageSeq);
+        DEBUG_PRINT_OLSR_RECEIVE("HDR size\t%d\n", messageHeader->m_messageSize);
+        DEBUG_PRINT_OLSR_RECEIVE("HDR seq\t%d\n", messageHeader->m_messageSeq);
 				#endif //DEBUG_OLSR_RECEIVE
-        switch (m_type) {
+      switch (type) 
+        {
         case HELLO_MESSAGE:
             DEBUG_PRINT_OLSR_RECEIVE("HELLO_MESSAGE\n");
             // olsr_process_hello_message(olsr_message);
+            olsrProcessHello(olsrMessage);
             break;
         case TC_MESSAGE:
             DEBUG_PRINT_OLSR_RECEIVE("TC_MESSAGE\n");
-            olsr_tc_process(olsr_message);
-            olsr_tc_forward(olsr_message);
+            // olsr_tc_process(olsr_message);
+            // olsr_tc_forward(olsr_message);
             break;
         case DATA_MESSAGE:
             DEBUG_PRINT_OLSR_RECEIVE("DATA_MESSAGE\n");
@@ -142,9 +145,9 @@ void olsr_packet_dispatch
             DEBUG_PRINT_OLSR_RECEIVE("WRONG MESSAGE\n");
             break;
         }
-        index+=olsr_message_header->m_messageSize;
-        olsr_message_idx+=olsr_message_header->m_messageSize;
-        olsr_message=(olsr_message_t*)olsr_message_idx;
+        index += messageHeader->m_messageSize;
+        olsrMessageIdx += messageHeader->m_messageSize;
+        olsrMessage = (olsrMessage_t*)olsrMessageIdx;
     }
 }
 
