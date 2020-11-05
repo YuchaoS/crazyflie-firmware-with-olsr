@@ -12,8 +12,8 @@
 
 //const
 
-#define OLSR_HELLO_INTERVAL 2000
-#define OLSR_NEIGHB_HOLD_TIME 3*OLSR_HELLO_INTERVAL
+#define OLSR_HELLO_INTERVAL 2
+#define OLSR_NEIGHB_HOLD_TIME (3*OLSR_HELLO_INTERVAL)
 #define TC_INTERVAL 500
 #define TS_INTERVAL 1000
 
@@ -91,13 +91,13 @@ void olsr_routing_table_compute(){
     DEBUG_PRINT_OLSR_SYSTEM("ROUTING TABLE COMPUTE!\n");
 }
 //packet process
-void olsr_tc_process(const olsr_message_t* tc_message){
+void olsr_tc_process(const olsrMessage_t* tc_message){
 
 }
-void olsr_tc_forward(olsr_message_t* tc_message){
+void olsr_tc_forward(olsrMessage_t* tc_message){
 
 }
-void olsr_ts_process(const olsr_message_t* ts_msg){
+void olsr_ts_process(const olsrMessage_t* ts_msg){
 
 }
 
@@ -127,7 +127,7 @@ void olsr_packet_dispatch(const packet_t* rxPacket)
         case HELLO_MESSAGE:
             DEBUG_PRINT_OLSR_RECEIVE("HELLO_MESSAGE\n");
             // olsr_process_hello_message(olsr_message);
-            olsrProcessHello(olsrMessage);
+            // olsrProcessHello(olsrMessage);
             break;
         case TC_MESSAGE:
             DEBUG_PRINT_OLSR_RECEIVE("TC_MESSAGE\n");
@@ -152,7 +152,7 @@ void olsr_packet_dispatch(const packet_t* rxPacket)
 }
 
 //send related function
-void olsr_generate_ts(olsr_message_t *ts_msg)
+void olsr_generate_ts(olsrMessage_t *ts_msg)
 {
 }
 
@@ -162,7 +162,7 @@ void olsrSendHello()
   //message header initial
   msg.m_messageHeader.m_messageType = HELLO_MESSAGE;
   msg.m_messageHeader.m_vTime = OLSR_NEIGHB_HOLD_TIME;
-  msg.m_messageSize = sizeof(olsrMessageHeader_t);
+  msg.m_messageHeader.m_messageSize = sizeof(olsrMessageHeader_t);
   msg.m_messageHeader.m_originatorAddress = myAddress;
   msg.m_messageHeader.m_destinationAddress = 0;
   msg.m_messageHeader.m_relayAddress = 0;  
@@ -171,7 +171,7 @@ void olsrSendHello()
   msg.m_messageHeader.m_messageSeq = getSeqNumber();
   //hello message
   olsrHeloMessage_t helloMessage;
-  helloMessage.m_helloHeader.m_hTime = HELLO_INTERVAL; //hello's header on packet
+  helloMessage.m_helloHeader.m_hTime = OLSR_HELLO_INTERVAL; //hello's header on packet
   helloMessage.m_helloHeader.m_willingness = WILL_ALWAYS;
   helloMessage.m_helloHeader.m_linkMessageNumber = 0;
 
@@ -203,7 +203,7 @@ void olsrSendHello()
         }
       if(olsrFindMprByAddr(olsrLinkSet[linkTupleIndex].data.m_localAddr))
         {
-           nb_type = OLSR_MPR_NEIGH;//2
+           nbType = OLSR_MPR_NEIGH;//2
         }
       else
         {
@@ -246,11 +246,11 @@ void olsrSendHello()
     }
   uint16_t writeSize = sizeof(olsrHelloMessageHeader_t)+helloMessage.m_helloHeader.m_linkMessageNumber*\
                        sizeof(olsrLinkMessage_t);
-  msg.m_messageSize +=  writeSize;                 
+  msg.m_messageHeader.m_messageSize +=  writeSize;                 
   memcpy(msg.m_messagePayload,&helloMessage,writeSize);
   xQueueSend(g_olsrSendQueue,&msg,portMAX_DELAY);
 }
-static void olsr_generate_tc(olsr_message_t *tc_message){
+static void olsr_generate_tc(olsrMessage_t *tc_message){
   //write header
 }
 
@@ -263,17 +263,17 @@ void olsrHelloTask(void *ptr){
         /* code */
         DEBUG_PRINT_OLSR_SEND("HELLO_SEND TO QUEUE\n");
         olsrSendHello();
-        vTaskDelay(M2T(HELLO_INTERVAL));
+        vTaskDelay(M2T(OLSR_HELLO_INTERVAL));
     }
 }
 void olsr_send_tc_to_queue(){
-    olsr_message_t t;
+    olsrMessage_t t;
     olsr_generate_tc(&t);
     xQueueSend(g_olsrSendQueue,&t,portMAX_DELAY);
     DEBUG_PRINT_OLSR_SYSTEM("TC_SEND TO QUEUE\n");
 }
 void olsr_send_ts_to_queue(){
-    olsr_message_t ts_msg={0};
+    olsrMessage_t ts_msg={0};
     olsr_generate_ts(&ts_msg);
     xQueueSend(g_olsrSendQueue,&ts_msg,portMAX_DELAY);
     DEBUG_PRINT_OLSR_SEND("TS_SEND TO QUEUE\n");
@@ -295,59 +295,59 @@ void olsr_ts_task(void *ptr){
         vTaskDelay(M2T(TS_INTERVAL)); 
     }
 }
-void olsr_send_task(void *ptr)
+void olsrSendTask(void *ptr)
 {
     //pointer initialize
-    packet_t dwpacket = {0};
-    bool has_olsr_message_cache =false;
-    olsrMessage_t olsr_message_cache = {0};
-  	MAC80215_PACKET_INIT(dwpacket, MAC802154_TYPE_OLSR)
-    dwm = (dwDevice_t *)ptr;
-    olsrPacket_t *olsr_packet = (olsrPacket_t *)dwpacket.payload;
+    packet_t dwPacket = {0};
+    bool hasMessageCache =false;
+    olsrMessage_t olsrMessageCache = {0};
+  	MAC80215_PACKET_INIT(dwPacket, MAC802154_TYPE_OLSR)
+    dwm = (dwDevice_t *)ptr; // can remove
+    olsrPacket_t *olsrPacket = (olsrPacket_t *)dwPacket.payload;
     olsrMessage_t *messages;
     //task loop
-    DEBUG_PRINT_OLSR_SEND("top:dwpacket:%u\n",(unsigned int)&dwpacket);
-    DEBUG_PRINT_OLSR_SEND("top:olsr_packet:%u\n",(unsigned int)olsr_packet);
+    DEBUG_PRINT_OLSR_SEND("top:dwpacket:%u\n",(unsigned int)&dwPacket);
+    DEBUG_PRINT_OLSR_SEND("top:olsr_packet:%u\n",(unsigned int)olsrPacket);
     int count = 0;
     while(true){
-      messages = (olsrMessage_t *)olsr_packet->content;
-      uint8_t *write_position = (uint8_t *)messages;
-      DEBUG_PRINT_OLSR_SEND("top:write_position:%u\n",(unsigned int)write_position);
-      if(has_olsr_message_cache){
-        configASSERT(olsr_message_cache.header.m_messageSize <= messageMaxSize);
-        memcpy(write_position,&olsr_message_cache,olsr_message_cache.header.m_messageSize);
-        write_position += olsr_message_cache.header.m_messageSize;
-        has_olsr_message_cache = false;
-         DEBUG_PRINT_OLSR_SEND("if1:write_position:%u\n",(unsigned int)write_position);
+      messages = (olsrMessage_t *)olsrPacket->m_packetPayload;
+      uint8_t *writePosition = (uint8_t *)messages;
+      DEBUG_PRINT_OLSR_SEND("top:write_position:%u\n",(unsigned int)writePosition);
+      if(hasMessageCache){
+        configASSERT(olsrMessageCache.m_messageHeader.m_messageSize <= MESSAGE_MAX_LENGTH);
+        memcpy(writePosition,&olsrMessageCache,olsrMessageCache.m_messageHeader.m_messageSize);
+        writePosition += olsrMessageCache.m_messageHeader.m_messageSize;
+        hasMessageCache = false;
+        DEBUG_PRINT_OLSR_SEND("if1:write_position:%u\n",(unsigned int)writePosition);
       }
-      while(xQueueReceive(g_olsrSendQueue, &olsr_message_cache, 700)){
+      while(xQueueReceive(g_olsrSendQueue, &olsrMessageCache, 700)){
         count++;
-        configASSERT(olsr_message_cache.header.m_messageSize <= messageMaxSize);
-        if(0==olsr_message_cache.header.m_timeTolive) break;
-        if(write_position+olsr_message_cache.header.m_messageSize-(uint8_t *)messages>messageMaxSize){
-          has_olsr_message_cache = true;
+        configASSERT(olsrMessageCache.m_messageHeader.m_messageSize <= MESSAGE_MAX_LENGTH);
+        if(0==olsrMessageCache.m_messageHeader.m_timeToLive) break;
+        if(writePosition+olsrMessageCache.m_messageHeader.m_messageSize-(uint8_t *)messages>MESSAGE_MAX_LENGTH){
+          hasMessageCache = true;
           break;
         }else{
-          DEBUG_PRINT_OLSR_SEND("this [%d]msg:%d\n",count,olsr_message_cache.header.m_messageSize);
-          memcpy(write_position,&olsr_message_cache,olsr_message_cache.header.m_messageSize);
-          write_position += olsr_message_cache.header.m_messageSize;
-         DEBUG_PRINT_OLSR_SEND("else:write_position:%u\n",(unsigned int)write_position);
+          DEBUG_PRINT_OLSR_SEND("this [%d]msg:%d\n",count,olsrMessageCache.m_messageHeader.m_messageSize);
+          memcpy(writePosition,&olsrMessageCache,olsrMessageCache.m_messageHeader.m_messageSize);
+          writePosition += olsrMessageCache.m_messageHeader.m_messageSize;
+         DEBUG_PRINT_OLSR_SEND("else:write_position:%u\n",(unsigned int)writePosition);
         }
       }
-      DEBUG_PRINT_OLSR_SEND("continue:write_position:%u\n",(unsigned int)(write_position-(uint8_t *)olsr_packet));
-      if(write_position-(uint8_t *)olsr_packet==sizeof(olsrPacketHeader_t)) {
+      DEBUG_PRINT_OLSR_SEND("continue:write_position:%u\n",(unsigned int)(writePosition-(uint8_t *)olsrPacket));
+      if(writePosition-(uint8_t *)olsrPacket==sizeof(olsrPacketHeader_t)) {
         vTaskDelay(20);
         continue;
       }
-      olsr_packet->header.olsr_p_length = write_position-(uint8_t *)olsr_packet;
-      olsr_packet->header.seq++;
-      DEBUG_PRINT_OLSR_SEND("bottom:olsr_p_length:%d\n",olsr_packet->header.olsr_p_length);
+      olsrPacket->m_packetHeader.m_packetLength = writePosition-(uint8_t *)olsrPacket;
+      olsrPacket->m_packetHeader.m_packetSeq++;
+      DEBUG_PRINT_OLSR_SEND("bottom:olsr_p_length:%d\n",olsrPacket->m_packetHeader.m_packetLength);
       //transmit
       dwNewTransmit(dwm);
       dwSetDefaults(dwm);
       dwWaitForResponse(dwm, true);
       dwReceivePermanently(dwm, true);
-      dwSetData(dwm, (uint8_t *)&dwpacket,MAC802154_HEADER_LENGTH+olsr_packet->header.olsr_p_length);
+      dwSetData(dwm, (uint8_t *)&dwPacket,MAC802154_HEADER_LENGTH+olsrPacket->m_packetHeader.m_packetLength);
       dwStartTransmit(dwm);
       DEBUG_PRINT_OLSR_SEND("send successful\n");
       count = 0;

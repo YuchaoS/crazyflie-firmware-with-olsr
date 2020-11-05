@@ -8,7 +8,7 @@
 
 
 void olsrHelloTask(void *ptr);
-void olsr_send_task(void *ptr);
+void olsrSendTask(void *ptr);
 void olsr_recv_task(void *ptr);
 void olsr_tc_task(void *ptr);
 void olsr_ts_task(void *ptr);

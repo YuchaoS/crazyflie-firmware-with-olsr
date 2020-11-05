@@ -211,7 +211,7 @@ olsrTimestampSetItem_t olsrTimestampSet[TIMESTAMP_SET_SIZE];
 
 
 bool olsrInsertToTopologySet(olsrTopologyTuple_t *tcTuple);
-
+bool olsrFindMprByAddr(olsrAddr_t addr);
 
 
 #endif //__OLSR_STRUCT_H__

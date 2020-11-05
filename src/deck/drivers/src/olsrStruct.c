@@ -23,6 +23,8 @@ static void olsrRecvQueueInit()
 /*
 ************************TopologySetFunctions********************
 */
+
+
 static SemaphoreHandle_t olsrTopologyEmptySetLock;
 static SemaphoreHandle_t olsrTopologyFullSetLock;
 
@@ -125,6 +127,7 @@ void olsrPrintTopologySet()
       pre =  olsrTopologySet[pre].next;
     }
 }
+
 /*
 ************************LinkSetFunctions********************
 */

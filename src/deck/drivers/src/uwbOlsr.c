@@ -54,7 +54,7 @@ static void OLSR_TS_TASK_INIT()
 static void OLSR_SEND_TASK_INIT(dwDevice_t *dev)
 {
     DEBUG_PRINT_OLSR_SYSTEM("START_OLSR_SEND_TASK_INIT\n");
-    if(xTaskCreate(olsr_send_task, "OLSR_SEND", 5*configMINIMAL_STACK_SIZE, dev,
+    if(xTaskCreate(olsrSendTask, "OLSR_SEND", 5*configMINIMAL_STACK_SIZE, dev,
                     LPS_DECK_TASK_PRI, NULL)==pdPASS){
                         DEBUG_PRINT_OLSR_SYSTEM("SEND TASK CREATE SUCCESSFUL\n");
                     }else{

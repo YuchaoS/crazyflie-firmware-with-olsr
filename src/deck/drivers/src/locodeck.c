@@ -278,7 +278,7 @@ static void uwbTask(void* parameters) {
   systemWaitStart();
   algorithm->init(dwm);
   while(1){
-    if (ulTaskNotifyTake(pdTRUE, timeout / portTICK_PERIOD_MS) > 0) {
+    if (ulTaskNotifyTake(pdTRUE, portMAX_DELAY) > 0) {
       do{
         dwHandleInterrupt(dwm);
       } while(digitalRead(GPIO_PIN_IRQ) != 0);
