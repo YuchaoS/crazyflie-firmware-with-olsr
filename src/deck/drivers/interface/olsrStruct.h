@@ -197,6 +197,8 @@ typedef struct
 } olsrNeighborSetItem_t;
 
 olsrNeighborSetItem_t olsrNeighborSet[NEIGHBOR_SET_SIZE];
+olsrNeighborSetItem_t N[NEIGHBOR_SET_SIZE];
+setIndex_t mprUtilNeighborEntry;
 
 typedef struct
 {
@@ -205,6 +207,8 @@ typedef struct
 } olsrTwoHopNeighborSetItem_t;
 
 olsrTwoHopNeighborSetItem_t olsrTwoHopNeighborSet[TWO_HOP_NEIGHBOR_SET_SIZE];
+olsrNeighborSetItem_t N2[TWO_HOP_NEIGHBOR_SET_SIZE];
+setIndex_t mprUtilTwoHopNeighborEntry;
 
 typedef struct 
 {

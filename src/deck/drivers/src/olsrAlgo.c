@@ -106,6 +106,7 @@ void olsr_tc_forward(olsrMessage_t* tc_message){
 void olsr_ts_process(const olsrMessage_t* ts_msg){
 
 }
+
 static void incrementAnsn()
 {
   xSemaphoreTake(olsrAnsnLock,portMAX_DELAY);
@@ -333,7 +334,7 @@ void olsrProcessHello(const olsrMessage_t* helloMsg)
   linkSensing(helloMsg);
   populateNeighborSet(helloMsg);
   PopulateTwoHopNeighborSet(helloMsg);
-  // MprComputation();
+  MprComputation();
 
 }
 //

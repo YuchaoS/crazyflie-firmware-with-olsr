@@ -236,22 +236,22 @@ setIndex_t olsrInsertToLinkSet(olsrLinkTuple_t *item)
 */
 
 
-static void olsrNeighborSetInit()
+static void olsrNeighborSetInit(olsrNeighborSetItem_t neighborObj[], setIndex_t *freeEntry, setIndex_t *fullEnrty)
 {
   int i;
   for(i=0; i < NEIGHBOR_SET_SIZE-1; i++)
     {
-      olsrNeighborSet[i].next = i+1;
+      neighborObj[i].next = i+1;
     }
-  olsrNeighborSet[i].next = -1;
-  olsrSetIndexEntry[NEIGHBOR_SET_T][FREE_ENTRY] = 0;
-  olsrSetIndexEntry[NEIGHBOR_SET_T][FULL_ENTRY] = -1;
+  neighborObj[i].next = -1;
+  *freeEntry = 0;
+  *fullEnrty = -1;
 }
 
-static setIndex_t olsrNeighborSetMalloc()
+static setIndex_t olsrNeighborSetMalloc(olsrNeighborSetItem_t neighborObj[], setIndex_t *freeEntry, setIndex_t *fullEnrty)
 {
   // xSemaphoreTake(olsrNeighborEmptySetLock, portMAX_DELAY);
-  if(olsrSetIndexEntry[NEIGHBOR_SET_T][FREE_ENTRY]==-1)
+  if(*freeEntry==-1)
     {
       DEBUG_PRINT_OLSR_SET("Full of sets!!!! can not malloc!!!\n");
       // xSemaphoreGive(olsrNeighborEmptySetLock);
@@ -259,20 +259,20 @@ static setIndex_t olsrNeighborSetMalloc()
     }
   else
     { 
-      setIndex_t candidate = olsrSetIndexEntry[NEIGHBOR_SET_T][FREE_ENTRY];
-      olsrSetIndexEntry[NEIGHBOR_SET_T][FREE_ENTRY] = olsrNeighborSet[candidate].next;
+      setIndex_t candidate = *freeEntry;
+      *freeEntry = neighborObj[candidate].next;
       // xSemaphoreGive(olsrNeighborEmptySetLock);
       //insert to full queue
       // xSemaphoreTake(olsrNeighborFullSetLock, portMAX_DELAY);
-      setIndex_t tmp = olsrSetIndexEntry[NEIGHBOR_SET_T][FULL_ENTRY];
-      olsrSetIndexEntry[NEIGHBOR_SET_T][FULL_ENTRY] = candidate;
-      olsrNeighborSet[candidate].next = tmp;
+      setIndex_t tmp = *fullEnrty;
+      *fullEnrty = candidate;
+      neighborObj[candidate].next = tmp;
       // xSemaphoreGive(olsrNeighborFullSetLock);
       return candidate;
     }
 }
-#ifdef nei
-static bool olsrNeighborSetFree(setIndex_t delItem)
+
+static bool olsrNeighborSetFree(olsrNeighborSetItem_t neighborObj[], setIndex_t *freeEntry, setIndex_t *fullEnrty, setIndex_t delItem)
 {
   if(-1==delItem) return true;
   //del from full queue
@@ -309,7 +309,7 @@ static bool olsrNeighborSetFree(setIndex_t delItem)
     }
     return false;
 }
-#endif
+
 setIndex_t olsrFindNeighborByAddr(const olsrAddr_t addr)
 {
   setIndex_t it = olsrSetIndexEntry[NEIGHBOR_SET_T][FULL_ENTRY];
