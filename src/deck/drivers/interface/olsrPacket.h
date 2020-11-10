@@ -111,12 +111,12 @@ typedef enum{
 //1
 typedef struct{
    olsrMessageType_t m_messageType;
-   uint8_t m_vTime; //The validity time.
+   uint16_t m_vTime; //The validity time.
    uint16_t m_messageSize;
    olsrAddr_t m_originatorAddress;
    olsrAddr_t m_relayAddress;
    olsrAddr_t m_destinationAddress;
-   uint16_t m_reserved;
+   uint8_t m_reserved;
    uint8_t m_timeToLive;
    uint8_t m_hopCount;
    uint16_t m_messageSeq;
@@ -132,8 +132,8 @@ typedef struct
 
 //hello message
 typedef struct{
-    uint16_t m_linkMessageNumber;
-    uint8_t m_hTime;
+    uint8_t m_linkMessageNumber;
+    uint16_t m_hTime;
     uint8_t m_willingness;
 } __attribute__((packed)) olsrHelloMessageHeader_t;//4bytes
 
@@ -147,7 +147,7 @@ typedef struct{
 typedef struct{
     olsrHelloMessageHeader_t  m_helloHeader;
     olsrLinkMessage_t m_linkMessage[LINK_MESSAGE_MAX_NUM];
-} __attribute__((packed)) olsrHeloMessage_t;
+} __attribute__((packed)) olsrHelloMessage_t;
 
 //tc
 // typedef struct 

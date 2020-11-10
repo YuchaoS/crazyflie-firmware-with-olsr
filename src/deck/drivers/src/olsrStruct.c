@@ -25,8 +25,7 @@ static void olsrRecvQueueInit()
 */
 
 
-static SemaphoreHandle_t olsrTopologyEmptySetLock;
-static SemaphoreHandle_t olsrTopologyFullSetLock;
+
 
 
 static void olsrTopologySetInit()
@@ -40,7 +39,7 @@ static void olsrTopologySetInit()
   olsrSetIndexEntry[TOPOLOGY_SET_T][FREE_ENTRY] = 0;
   olsrSetIndexEntry[TOPOLOGY_SET_T][FULL_ENTRY] = -1;
 }
-
+#ifdef ii
 static setIndex_t olsrTopologySetMalloc()
 {
   xSemaphoreTake(olsrTopologyEmptySetLock, portMAX_DELAY);
@@ -77,8 +76,8 @@ static bool olsrTopologySetFree(setIndex_t delItem)
       xSemaphoreGive(olsrTopologyFullSetLock);
       //insert to empty queue
       xSemaphoreTake(olsrTopologyEmptySetLock,portMAX_DELAY);
-      olsrSetIndexEntry[TOPOLOGY_SET_T][FULL_ENTRY] = delItem;
-      olsrTopologySet[delItem].next = pre;
+      olsrTopologySet[delItem].next = olsrSetIndexEntry[TOPOLOGY_SET_T][FREE_ENTRY];
+      olsrSetIndexEntry[TOPOLOGY_SET_T][FREE_ENTRY] = delItem;
       xSemaphoreGive(olsrTopologyEmptySetLock);
       return true;
     }
@@ -92,8 +91,8 @@ static bool olsrTopologySetFree(setIndex_t delItem)
               xSemaphoreGive(olsrTopologyFullSetLock);
               //insert to empty queue
               xSemaphoreTake(olsrTopologyEmptySetLock,portMAX_DELAY);
-              olsrSetIndexEntry[TOPOLOGY_SET_T][FULL_ENTRY] = delItem;
-              olsrTopologySet[delItem].next = pre;
+              olsrTopologySet[delItem].next = olsrSetIndexEntry[TOPOLOGY_SET_T][FREE_ENTRY];
+              olsrSetIndexEntry[TOPOLOGY_SET_T][FREE_ENTRY] = delItem;
               xSemaphoreGive(olsrTopologyEmptySetLock);
               return true;
             }
@@ -127,12 +126,10 @@ void olsrPrintTopologySet()
       pre =  olsrTopologySet[pre].next;
     }
 }
-
+#endif
 /*
 ************************LinkSetFunctions********************
 */
-static SemaphoreHandle_t olsrLinkEmptySetLock;
-static SemaphoreHandle_t olsrLinkFullSetLock;
 
 static void olsrLinkSetInit()
 {
@@ -148,71 +145,96 @@ static void olsrLinkSetInit()
 
 static setIndex_t olsrLinkSetMalloc()
 {
-  xSemaphoreTake(olsrLinkEmptySetLock, portMAX_DELAY);
+  // xSemaphoreTake(olsrLinkEmptySetLock, portMAX_DELAY);
   if(olsrSetIndexEntry[LINK_SET_T][FREE_ENTRY]==-1)
     {
       DEBUG_PRINT_OLSR_SET("Full of sets!!!! can not malloc!!!\n");
-      xSemaphoreGive(olsrLinkEmptySetLock);
+      // xSemaphoreGive(olsrLinkEmptySetLock);
       return -1;
     }
   else
     { 
       setIndex_t candidate = olsrSetIndexEntry[LINK_SET_T][FREE_ENTRY];
       olsrSetIndexEntry[LINK_SET_T][FREE_ENTRY] = olsrLinkSet[candidate].next;
-      xSemaphoreGive(olsrLinkEmptySetLock);
+      // xSemaphoreGive(olsrLinkEmptySetLock);
       //insert to full queue
-      xSemaphoreTake(olsrLinkFullSetLock, portMAX_DELAY);
+      // xSemaphoreTake(olsrLinkFullSetLock, portMAX_DELAY);
       setIndex_t tmp = olsrSetIndexEntry[LINK_SET_T][FULL_ENTRY];
       olsrSetIndexEntry[LINK_SET_T][FULL_ENTRY] = candidate;
       olsrLinkSet[candidate].next = tmp;
-      xSemaphoreGive(olsrLinkFullSetLock);
+      // xSemaphoreGive(olsrLinkFullSetLock);
       return candidate;
     }
 }
 
-static bool olsrLinkSetFree(setIndex_t delItem)
-{
-  if(-1==delItem) return true;
-  //del from full queue
-  xSemaphoreTake(olsrLinkFullSetLock, portMAX_DELAY);
-  setIndex_t pre = olsrSetIndexEntry[LINK_SET_T][FULL_ENTRY];
-  if(delItem == pre)
-    {
-      olsrSetIndexEntry[LINK_SET_T][FULL_ENTRY] = olsrLinkSet[pre].next;
-      xSemaphoreGive(olsrLinkFullSetLock);
-      //insert to empty queue
-      xSemaphoreTake(olsrLinkEmptySetLock,portMAX_DELAY);
-      olsrSetIndexEntry[LINK_SET_T][FULL_ENTRY] = delItem;
-      olsrLinkSet[delItem].next = pre;
-      xSemaphoreGive(olsrLinkEmptySetLock);
-      return true;
-    }
-  else 
-    {
-      while(pre!=-1)
-        {
-          if(olsrLinkSet[pre].next==delItem)
-            {
-              olsrLinkSet[pre].next = olsrLinkSet[delItem].next;
-              xSemaphoreGive(olsrLinkFullSetLock);
-              //insert to empty queue
-              xSemaphoreTake(olsrLinkEmptySetLock,portMAX_DELAY);
-              olsrSetIndexEntry[LINK_SET_T][FULL_ENTRY] = delItem;
-              olsrLinkSet[delItem].next = pre;
-              xSemaphoreGive(olsrLinkEmptySetLock);
-              return true;
-            }
-          pre = olsrLinkSet[pre].next;
-        }
-    }
-    return false;
-}
+// static bool olsrLinkSetFree(setIndex_t delItem)
+// {
+//   if(-1==delItem) return true;
+//   //del from full queue
+//   // xSemaphoreTake(olsrLinkFullSetLock, portMAX_DELAY);
+//   setIndex_t pre = olsrSetIndexEntry[LINK_SET_T][FULL_ENTRY];
+//   if(delItem == pre)
+//     {
+//       olsrSetIndexEntry[LINK_SET_T][FULL_ENTRY] = olsrLinkSet[pre].next;
+//       // xSemaphoreGive(olsrLinkFullSetLock);
+//       //insert to empty queue
+//       // xSemaphoreTake(olsrLinkEmptySetLock,portMAX_DELAY);
+//       olsrLinkSet[delItem].next = olsrSetIndexEntry[LINK_SET_T][FREE_ENTRY];
+//       olsrSetIndexEntry[LINK_SET_T][FREE_ENTRY] = delItem;
+//       // xSemaphoreGive(olsrLinkEmptySetLock);
+//       return true;
+//     }
+//   else 
+//     {
+//       while(pre!=-1)
+//         {
+//           if(olsrLinkSet[pre].next==delItem)
+//             {
+//               olsrLinkSet[pre].next = olsrLinkSet[delItem].next;
+//               // xSemaphoreGive(olsrLinkFullSetLock);
+//               //insert to empty queue
+//               // xSemaphoreTake(olsrLinkEmptySetLock,portMAX_DELAY);
+//               olsrLinkSet[delItem].next = olsrSetIndexEntry[LINK_SET_T][FREE_ENTRY];
+//               olsrSetIndexEntry[LINK_SET_T][FREE_ENTRY] = delItem;
+//               // xSemaphoreGive(olsrLinkEmptySetLock);
+//               return true;
+//             }
+//           pre = olsrLinkSet[pre].next;
+//         }
+//     }
+//     return false;
+// }
 
+setIndex_t olsrFindInLinkByAddr(const olsrAddr_t addr)
+{
+  setIndex_t it = olsrSetIndexEntry[LINK_SET_T][FULL_ENTRY];
+  while(it!=-1)
+    {
+      if(olsrLinkSet[it].data.m_neighborAddr==addr)
+        {
+          break;
+        }
+      it = olsrLinkSet[it].next;
+    }
+  return it;
+}
+setIndex_t olsrInsertToLinkSet(olsrLinkTuple_t *item)
+{
+  setIndex_t candidate = olsrLinkSetMalloc();
+  if(candidate!=-1)
+    {
+      memcpy(&olsrLinkSet[candidate].data,item,sizeof(olsrLinkTuple_t));
+    }
+  else
+    {
+      DEBUG_PRINT_OLSR_LINK("bad alloc whan insert by function [olsrInsertToLinkSet]\n");
+    }
+  return candidate;
+}
 /*
 ************************NeighborSetFunctions********************
 */
-static SemaphoreHandle_t olsrNeighborEmptySetLock;
-static SemaphoreHandle_t olsrNeighborFullSetLock;
+
 
 static void olsrNeighborSetInit()
 {
@@ -228,43 +250,43 @@ static void olsrNeighborSetInit()
 
 static setIndex_t olsrNeighborSetMalloc()
 {
-  xSemaphoreTake(olsrNeighborEmptySetLock, portMAX_DELAY);
+  // xSemaphoreTake(olsrNeighborEmptySetLock, portMAX_DELAY);
   if(olsrSetIndexEntry[NEIGHBOR_SET_T][FREE_ENTRY]==-1)
     {
       DEBUG_PRINT_OLSR_SET("Full of sets!!!! can not malloc!!!\n");
-      xSemaphoreGive(olsrNeighborEmptySetLock);
+      // xSemaphoreGive(olsrNeighborEmptySetLock);
       return -1;
     }
   else
     { 
       setIndex_t candidate = olsrSetIndexEntry[NEIGHBOR_SET_T][FREE_ENTRY];
       olsrSetIndexEntry[NEIGHBOR_SET_T][FREE_ENTRY] = olsrNeighborSet[candidate].next;
-      xSemaphoreGive(olsrNeighborEmptySetLock);
+      // xSemaphoreGive(olsrNeighborEmptySetLock);
       //insert to full queue
-      xSemaphoreTake(olsrNeighborFullSetLock, portMAX_DELAY);
+      // xSemaphoreTake(olsrNeighborFullSetLock, portMAX_DELAY);
       setIndex_t tmp = olsrSetIndexEntry[NEIGHBOR_SET_T][FULL_ENTRY];
       olsrSetIndexEntry[NEIGHBOR_SET_T][FULL_ENTRY] = candidate;
       olsrNeighborSet[candidate].next = tmp;
-      xSemaphoreGive(olsrNeighborFullSetLock);
+      // xSemaphoreGive(olsrNeighborFullSetLock);
       return candidate;
     }
 }
-
+#ifdef nei
 static bool olsrNeighborSetFree(setIndex_t delItem)
 {
   if(-1==delItem) return true;
   //del from full queue
-  xSemaphoreTake(olsrNeighborFullSetLock, portMAX_DELAY);
+  // xSemaphoreTake(olsrNeighborFullSetLock, portMAX_DELAY);
   setIndex_t pre = olsrSetIndexEntry[NEIGHBOR_SET_T][FULL_ENTRY];
   if(delItem == pre)
     {
       olsrSetIndexEntry[NEIGHBOR_SET_T][FULL_ENTRY] = olsrNeighborSet[pre].next;
-      xSemaphoreGive(olsrNeighborFullSetLock);
+      // xSemaphoreGive(olsrNeighborFullSetLock);
       //insert to empty queue
-      xSemaphoreTake(olsrNeighborEmptySetLock,portMAX_DELAY);
-      olsrSetIndexEntry[NEIGHBOR_SET_T][FULL_ENTRY] = delItem;
-      olsrNeighborSet[delItem].next = pre;
-      xSemaphoreGive(olsrNeighborEmptySetLock);
+      // xSemaphoreTake(olsrNeighborEmptySetLock,portMAX_DELAY);
+      olsrNeighborSet[delItem].next = olsrSetIndexEntry[NEIGHBOR_SET_T][FREE_ENTRY];
+      olsrSetIndexEntry[NEIGHBOR_SET_T][FREE_ENTRY] = delItem;
+      // xSemaphoreGive(olsrNeighborEmptySetLock);
       return true;
     }
   else 
@@ -274,12 +296,12 @@ static bool olsrNeighborSetFree(setIndex_t delItem)
           if(olsrNeighborSet[pre].next==delItem)
             {
               olsrNeighborSet[pre].next = olsrNeighborSet[delItem].next;
-              xSemaphoreGive(olsrNeighborFullSetLock);
+              // xSemaphoreGive(olsrNeighborFullSetLock);
               //insert to empty queue
-              xSemaphoreTake(olsrNeighborEmptySetLock,portMAX_DELAY);
-              olsrSetIndexEntry[NEIGHBOR_SET_T][FULL_ENTRY] = delItem;
-              olsrNeighborSet[delItem].next = pre;
-              xSemaphoreGive(olsrNeighborEmptySetLock);
+              // xSemaphoreTake(olsrNeighborEmptySetLock,portMAX_DELAY);
+              olsrNeighborSet[delItem].next = olsrSetIndexEntry[NEIGHBOR_SET_T][FREE_ENTRY];
+              olsrSetIndexEntry[NEIGHBOR_SET_T][FREE_ENTRY] = delItem;
+              // xSemaphoreGive(olsrNeighborEmptySetLock);
               return true;
             }
           pre = olsrNeighborSet[pre].next;
@@ -287,12 +309,156 @@ static bool olsrNeighborSetFree(setIndex_t delItem)
     }
     return false;
 }
+#endif
+setIndex_t olsrFindNeighborByAddr(const olsrAddr_t addr)
+{
+  setIndex_t it = olsrSetIndexEntry[NEIGHBOR_SET_T][FULL_ENTRY];
+  while(it!=-1)
+    {
+      if(olsrNeighborSet[it].data.m_neighborAddr==addr)
+        {
+          break;
+        }
+      it = olsrNeighborSet[it].next;
+    }
+  return it;
+}
+setIndex_t olsrInsertToNeighborSet(const olsrNeighborTuple_t* tuple)
+{
+  setIndex_t candidate = olsrNeighborSetMalloc();
+  if(candidate != -1)
+    {
+      memcpy(&olsrNeighborSet[candidate].data,tuple,sizeof(olsrNeighborTuple_t));
+    }
+  else
+    {
+      DEBUG_PRINT_OLSR_NEIGHBOR("bad alloc whan insert by function [olsrInsertToNeighborSet]\n");
+    }
+  return candidate;
+}
+
+/*
+************************TwoNeighborSetFunctions********************
+*/
+
+
+static void olsrTwoHopNeighborSetInit()
+{
+  int i;
+  for(i=0; i < TWO_HOP_NEIGHBOR_SET_SIZE-1; i++)
+    {
+      olsrTwoHopNeighborSet[i].next = i+1;
+    }
+  olsrTwoHopNeighborSet[i].next = -1;
+  olsrSetIndexEntry[TWO_HOP_NEIGHBOR_SET_T][FREE_ENTRY] = 0;
+  olsrSetIndexEntry[TWO_HOP_NEIGHBOR_SET_T][FULL_ENTRY] = -1;
+}
+
+static setIndex_t olsrTwoHopNeighborSetMalloc()
+{
+  // xSemaphoreTake(olsrNeighborEmptySetLock, portMAX_DELAY);
+  if(olsrSetIndexEntry[TWO_HOP_NEIGHBOR_SET_T][FREE_ENTRY]==-1)
+    {
+      DEBUG_PRINT_OLSR_SET("Full of sets!!!! can not malloc!!!\n");
+      // xSemaphoreGive(olsrNeighborEmptySetLock);
+      return -1;
+    }
+  else
+    { 
+      setIndex_t candidate = olsrSetIndexEntry[TWO_HOP_NEIGHBOR_SET_T][FREE_ENTRY];
+      olsrSetIndexEntry[TWO_HOP_NEIGHBOR_SET_T][FREE_ENTRY] = olsrNeighborSet[candidate].next;
+      // xSemaphoreGive(olsrNeighborEmptySetLock);
+      //insert to full queue
+      // xSemaphoreTake(olsrNeighborFullSetLock, portMAX_DELAY);
+      setIndex_t tmp = olsrSetIndexEntry[TWO_HOP_NEIGHBOR_SET_T][FULL_ENTRY];
+      olsrSetIndexEntry[TWO_HOP_NEIGHBOR_SET_T][FULL_ENTRY] = candidate;
+      olsrTwoHopNeighborSet[candidate].next = tmp;
+      // xSemaphoreGive(olsrNeighborFullSetLock);
+      return candidate;
+    }
+}
+
+static bool olsrTwoHopNeighborSetFree(setIndex_t delItem)
+{
+  if(-1==delItem) return true;
+  //del from full queue
+  // xSemaphoreTake(olsrNeighborFullSetLock, portMAX_DELAY);
+  setIndex_t pre = olsrSetIndexEntry[TWO_HOP_NEIGHBOR_SET_T][FULL_ENTRY];
+  if(delItem == pre)
+    {
+      olsrSetIndexEntry[TWO_HOP_NEIGHBOR_SET_T][FULL_ENTRY] = olsrTwoHopNeighborSet[pre].next;
+      // xSemaphoreGive(olsrNeighborFullSetLock);
+      //insert to empty queue
+      // xSemaphoreTake(olsrNeighborEmptySetLock,portMAX_DELAY);
+      olsrTwoHopNeighborSet[delItem].next = olsrSetIndexEntry[TWO_HOP_NEIGHBOR_SET_T][FREE_ENTRY];
+      olsrSetIndexEntry[TWO_HOP_NEIGHBOR_SET_T][FREE_ENTRY] = delItem;
+      // xSemaphoreGive(olsrNeighborEmptySetLock);
+      return true;
+    }
+  else 
+    {
+      while(pre!=-1)
+        {
+          if(olsrTwoHopNeighborSet[pre].next==delItem)
+            {
+              olsrTwoHopNeighborSet[pre].next = olsrTwoHopNeighborSet[delItem].next;
+              // xSemaphoreGive(olsrNeighborFullSetLock);
+              //insert to empty queue
+              // xSemaphoreTake(olsrNeighborEmptySetLock,portMAX_DELAY);
+              olsrTwoHopNeighborSet[delItem].next = olsrSetIndexEntry[TWO_HOP_NEIGHBOR_SET_T][FREE_ENTRY];
+              olsrSetIndexEntry[TWO_HOP_NEIGHBOR_SET_T][FREE_ENTRY] = delItem;
+              // xSemaphoreGive(olsrNeighborEmptySetLock);
+              return true;
+            }
+          pre = olsrTwoHopNeighborSet[pre].next;
+        }
+    }
+    return false;
+}
+setIndex_t olsrFindTwoHopNeighborTuple(olsrAddr_t neighborAddr, olsrAddr_t twoHopNeighborAddr)
+{
+  setIndex_t candidate = olsrSetIndexEntry[TWO_HOP_NEIGHBOR_SET_T][FULL_ENTRY];
+  while(candidate != -1)
+    {
+      if(olsrTwoHopNeighborSet[candidate].data.m_neighborAddr == neighborAddr\
+      &&olsrTwoHopNeighborSet[candidate].data.m_twoHopNeighborAddr == twoHopNeighborAddr)
+        {
+          break;
+        }
+    }
+  return candidate;
+}
+
+setIndex_t olsrInsertToTwoHopNeighborSet(const olsrTwoHopNeighborTuple_t* tuple)
+{
+  setIndex_t candidate = olsrTwoHopNeighborSetMalloc();
+  if(candidate != -1)
+    {
+      memcpy(&olsrTwoHopNeighborSet[candidate].data,tuple,sizeof(olsrTwoHopNeighborTuple_t));
+    }
+  else
+    {
+      DEBUG_PRINT_OLSR_NEIGHBOR2("bad alloc.\n");
+    }
+  return candidate;
+}
+
+bool olsrEraseTwoHopNeighborTuple(olsrAddr_t neighborAddr, olsrAddr_t twoHopNeighborAddr)
+{
+  setIndex_t candidate = olsrFindTwoHopNeighborTuple(neighborAddr,twoHopNeighborAddr);
+  if(candidate != -1)
+    {
+      if(olsrTwoHopNeighborSetFree(candidate) != false)
+        {
+          return true;
+        }
+    }
+  return false;
+}
 
 /*
 ************************MprSetFunctions********************
 */
-static SemaphoreHandle_t olsrMprEmptySetLock;
-static SemaphoreHandle_t olsrMprFullSetLock;
 
 static void olsrMprSetInit()
 {
@@ -306,67 +472,67 @@ static void olsrMprSetInit()
   olsrSetIndexEntry[MPR_SET_T][FULL_ENTRY] = -1;
 }
 
-static setIndex_t olsrMprSetMalloc()
-{
-  xSemaphoreTake(olsrMprEmptySetLock, portMAX_DELAY);
-  if(olsrSetIndexEntry[MPR_SET_T][FREE_ENTRY]==-1)
-    {
-      DEBUG_PRINT_OLSR_SET("Full of sets!!!! can not malloc!!!\n");
-      xSemaphoreGive(olsrMprEmptySetLock);
-      return -1;
-    }
-  else
-    { 
-      setIndex_t candidate = olsrSetIndexEntry[MPR_SET_T][FREE_ENTRY];
-      olsrSetIndexEntry[MPR_SET_T][FREE_ENTRY] = olsrMprSet[candidate].next;
-      xSemaphoreGive(olsrMprEmptySetLock);
-      //insert to full queue
-      xSemaphoreTake(olsrMprFullSetLock, portMAX_DELAY);
-      setIndex_t tmp = olsrSetIndexEntry[MPR_SET_T][FULL_ENTRY];
-      olsrSetIndexEntry[MPR_SET_T][FULL_ENTRY] = candidate;
-      olsrMprSet[candidate].next = tmp;
-      xSemaphoreGive(olsrMprFullSetLock);
-      return candidate;
-    }
-}
+// static setIndex_t olsrMprSetMalloc()
+// {
+//   xSemaphoreTake(olsrMprEmptySetLock, portMAX_DELAY);
+//   if(olsrSetIndexEntry[MPR_SET_T][FREE_ENTRY]==-1)
+//     {
+//       DEBUG_PRINT_OLSR_SET("Full of sets!!!! can not malloc!!!\n");
+//       xSemaphoreGive(olsrMprEmptySetLock);
+//       return -1;
+//     }
+//   else
+//     { 
+//       setIndex_t candidate = olsrSetIndexEntry[MPR_SET_T][FREE_ENTRY];
+//       olsrSetIndexEntry[MPR_SET_T][FREE_ENTRY] = olsrMprSet[candidate].next;
+//       xSemaphoreGive(olsrMprEmptySetLock);
+//       //insert to full queue
+//       xSemaphoreTake(olsrMprFullSetLock, portMAX_DELAY);
+//       setIndex_t tmp = olsrSetIndexEntry[MPR_SET_T][FULL_ENTRY];
+//       olsrSetIndexEntry[MPR_SET_T][FULL_ENTRY] = candidate;
+//       olsrMprSet[candidate].next = tmp;
+//       xSemaphoreGive(olsrMprFullSetLock);
+//       return candidate;
+//     }
+// }
 
-static bool olsrMprSetFree(setIndex_t delItem)
-{
-  if(-1==delItem) return true;
-  //del from full queue
-  xSemaphoreTake(olsrMprFullSetLock, portMAX_DELAY);
-  setIndex_t pre = olsrSetIndexEntry[MPR_SET_T][FULL_ENTRY];
-  if(delItem == pre)
-    {
-      olsrSetIndexEntry[MPR_SET_T][FULL_ENTRY] = olsrMprSet[pre].next;
-      xSemaphoreGive(olsrMprFullSetLock);
-      //insert to empty queue
-      xSemaphoreTake(olsrMprEmptySetLock,portMAX_DELAY);
-      olsrSetIndexEntry[MPR_SET_T][FULL_ENTRY] = delItem;
-      olsrMprSet[delItem].next = pre;
-      xSemaphoreGive(olsrMprEmptySetLock);
-      return true;
-    }
-  else 
-    {
-      while(pre!=-1)
-        {
-          if(olsrMprSet[pre].next==delItem)
-            {
-              olsrMprSet[pre].next = olsrMprSet[delItem].next;
-              xSemaphoreGive(olsrMprFullSetLock);
-              //insert to empty queue
-              xSemaphoreTake(olsrMprEmptySetLock,portMAX_DELAY);
-              olsrSetIndexEntry[MPR_SET_T][FULL_ENTRY] = delItem;
-              olsrMprSet[delItem].next = pre;
-              xSemaphoreGive(olsrMprEmptySetLock);
-              return true;
-            }
-          pre = olsrMprSet[pre].next;
-        }
-    }
-    return false;
-}
+// static bool olsrMprSetFree(setIndex_t delItem)
+// {
+//   if(-1==delItem) return true;
+//   //del from full queue
+//   xSemaphoreTake(olsrMprFullSetLock, portMAX_DELAY);
+//   setIndex_t pre = olsrSetIndexEntry[MPR_SET_T][FULL_ENTRY];
+//   if(delItem == pre)
+//     {
+//       olsrSetIndexEntry[MPR_SET_T][FULL_ENTRY] = olsrMprSet[pre].next;
+//       xSemaphoreGive(olsrMprFullSetLock);
+//       //insert to empty queue
+//       xSemaphoreTake(olsrMprEmptySetLock,portMAX_DELAY);
+//       olsrMprSet[delItem].next = olsrSetIndexEntry[MPR_SET_T][FREE_ENTRY];
+//       olsrSetIndexEntry[MPR_SET_T][FREE_ENTRY] = delItem;
+//       xSemaphoreGive(olsrMprEmptySetLock);
+//       return true;
+//     }
+//   else 
+//     {
+//       while(pre!=-1)
+//         {
+//           if(olsrMprSet[pre].next==delItem)
+//             {
+//               olsrMprSet[pre].next = olsrMprSet[delItem].next;
+//               xSemaphoreGive(olsrMprFullSetLock);
+//               //insert to empty queue
+//               xSemaphoreTake(olsrMprEmptySetLock,portMAX_DELAY);
+//               olsrMprSet[delItem].next = olsrSetIndexEntry[MPR_SET_T][FREE_ENTRY];
+//               olsrSetIndexEntry[MPR_SET_T][FREE_ENTRY] = delItem;
+//               xSemaphoreGive(olsrMprEmptySetLock);
+//               return true;
+//             }
+//           pre = olsrMprSet[pre].next;
+//         }
+//     }
+//     return false;
+// }
 
 bool olsrFindMprByAddr(olsrAddr_t addr)
 {
@@ -383,9 +549,85 @@ bool olsrFindMprByAddr(olsrAddr_t addr)
     }
   return isFound;
 }
+/*
+************************DuplicateSetFunctions********************
+*/
 
 
+static void olsrDuplicateSetInit()
+{
+  int i;
+  for(i=0; i < DUPLICATE_SET_SIZE-1; i++)
+    {
+      olsrDuplicateSet[i].next = i+1;
+    }
+  olsrDuplicateSet[i].next = -1;
+  olsrSetIndexEntry[DUPLICATE_SET_T][FREE_ENTRY] = 0;
+  olsrSetIndexEntry[DUPLICATE_SET_T][FULL_ENTRY] = -1;
+}
+#ifdef p
+static setIndex_t olsrDuplicateSetMalloc()
+{
+  xSemaphoreTake(olsrDuplicateEmptySetLock, portMAX_DELAY);
+  if(olsrSetIndexEntry[DUPLICATE_SET_T][FREE_ENTRY]==-1)
+    {
+      DEBUG_PRINT_OLSR_SET("Full of sets!!!! can not malloc!!!\n");
+      xSemaphoreGive(olsrDuplicateEmptySetLock);
+      return -1;
+    }
+  else
+    { 
+      setIndex_t candidate = olsrSetIndexEntry[DUPLICATE_SET_T][FREE_ENTRY];
+      olsrSetIndexEntry[DUPLICATE_SET_T][FREE_ENTRY] = olsrDuplicateSet[candidate].next;
+      xSemaphoreGive(olsrDuplicateEmptySetLock);
+      //insert to full queue
+      xSemaphoreTake(olsrDuplicateFullSetLock, portMAX_DELAY);
+      setIndex_t tmp = olsrSetIndexEntry[DUPLICATE_SET_T][FULL_ENTRY];
+      olsrSetIndexEntry[DUPLICATE_SET_T][FULL_ENTRY] = candidate;
+      olsrDuplicateSet[candidate].next = tmp;
+      xSemaphoreGive(olsrDuplicateFullSetLock);
+      return candidate;
+    }
+}
 
+static bool olsrDuplicateSetFree(setIndex_t delItem)
+{
+  if(-1==delItem) return true;
+  //del from full queue
+  xSemaphoreTake(olsrDuplicateFullSetLock, portMAX_DELAY);
+  setIndex_t pre = olsrSetIndexEntry[DUPLICATE_SET_T][FULL_ENTRY];
+  if(delItem == pre)
+    {
+      olsrSetIndexEntry[DUPLICATE_SET_T][FULL_ENTRY] = olsrDuplicateSet[pre].next;
+      xSemaphoreGive(olsrDuplicateFullSetLock);
+      //insert to empty queue
+      xSemaphoreTake(olsrDuplicateEmptySetLock,portMAX_DELAY);
+      olsrDuplicateSet[delItem].next = olsrSetIndexEntry[DUPLICATE_SET_T][FREE_ENTRY];
+      olsrSetIndexEntry[DUPLICATE_SET_T][FREE_ENTRY] = delItem;
+      xSemaphoreGive(olsrDuplicateEmptySetLock);
+      return true;
+    }
+  else 
+    {
+      while(pre!=-1)
+        {
+          if(olsrDuplicateSet[pre].next==delItem)
+            {
+              olsrDuplicateSet[pre].next = olsrDuplicateSet[delItem].next;
+              xSemaphoreGive(olsrDuplicateFullSetLock);
+              //insert to empty queue
+              xSemaphoreTake(olsrDuplicateEmptySetLock,portMAX_DELAY);
+              olsrDuplicateSet[delItem].next = olsrSetIndexEntry[DUPLICATE_SET_T][FREE_ENTRY];
+              olsrSetIndexEntry[DUPLICATE_SET_T][FREE_ENTRY] = delItem;
+              xSemaphoreGive(olsrDuplicateEmptySetLock);
+              return true;
+            }
+          pre = olsrDuplicateSet[pre].next;
+        }
+    }
+    return false;
+}
+#endif
 
 /*
 ************************CommonFunctions********************
@@ -412,16 +654,20 @@ static void olsrSetEntryInit()
   olsrNeighborFullSetLock = xSemaphoreCreateMutex();
   olsrMprEmptySetLock = xSemaphoreCreateMutex();
   olsrMprFullSetLock = xSemaphoreCreateMutex();
+  olsrTwoHopNeighborEmptySetLock = xSemaphoreCreateMutex();
+  olsrTwoHopNeighborFullSetLock = xSemaphoreCreateMutex();
 }
 
 
 void olsrStructInitAll(dwDevice_t *dev)
 {
-    olsrSendQueueInit();
-    olsrRecvQueueInit();
-    olsrSetEntryInit();
-    olsrTopologySetInit();
-    olsrLinkSetInit();
-    olsrNeighborSetInit();
-
+  olsrSendQueueInit();
+  olsrRecvQueueInit();
+  olsrSetEntryInit();
+  olsrTopologySetInit();
+  olsrLinkSetInit();
+  olsrNeighborSetInit();
+  olsrTwoHopNeighborSetInit();
+  olsrMprSetInit();
+  olsrDuplicateSetInit();
 }

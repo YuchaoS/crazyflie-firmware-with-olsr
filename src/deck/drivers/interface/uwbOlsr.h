@@ -6,7 +6,7 @@
 #include "mac.h"
 
 extern uwbAlgorithm_t uwbOLSRAlgorithm;
-
+uint16_t myAddress ;
 
 
 #define MAX_UWB_RECEIVE_TIMEOUT 65 //65ms is max interval

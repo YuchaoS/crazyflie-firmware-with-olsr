@@ -14,12 +14,14 @@
 #include "olsrDebug.h"
 #include "olsrAlgo.h"
 #include "olsrStruct.h"
+#include "uwbOlsr.h"
 
 
 
 static void olsrStructInit(dwDevice_t *dev){
     DEBUG_PRINT_OLSR_SYSTEM("START OLSR_STRUCT_INIT\n");
     olsrStructInitAll(dev);
+    olsrDeviceInit(dev);
 }
 static void olsrHelloTaskInit()
 {
@@ -64,7 +66,7 @@ static void OLSR_SEND_TASK_INIT(dwDevice_t *dev)
 static void OLSR_RECV_TASK_INIT(dwDevice_t *dev)
 {
     DEBUG_PRINT_OLSR_SYSTEM("START_OLSR_RECV_TASK_INIT\n");
-    if(xTaskCreate(olsr_recv_task, "OLSR_RECV", 5*configMINIMAL_STACK_SIZE, dev,
+    if(xTaskCreate(olsrRecvTask, "OLSR_RECV", 5*configMINIMAL_STACK_SIZE, dev,
                     LPS_DECK_TASK_PRI, NULL)==pdPASS){
                         DEBUG_PRINT_OLSR_SYSTEM("RECV TASK CREATE SUCCESSFUL\n");
                     }else{
@@ -85,6 +87,8 @@ static void olsrInit(dwDevice_t *dev)
 {
     systemWaitStart();
     DEBUG_PRINT_OLSR_SYSTEM("init to new deck OLSR");
+    int myChanel = configblockGetRadioChannel();
+    myAddress = myChanel|0x0000;
     olsrStructInit(dev);
     olsrTaskInit(dev);
 }

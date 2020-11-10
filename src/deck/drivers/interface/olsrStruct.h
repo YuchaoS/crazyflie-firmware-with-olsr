@@ -1,9 +1,11 @@
 #ifndef __OLSR_STRUCT_H__
 #define __OLSR_STRUCT_H__
 #include "FreeRTOS.h"
-#include<queue.h>
+#include "semphr.h"
+#include <queue.h>
 #include"locodeck.h"
-#include"FreeRTOS.h"
+#include <string.h>
+
 /*
 *********************Recv&SendQueue*************************
 */
@@ -37,9 +39,13 @@ typedef short setIndex_t;
 #define TIMESTAMP_SET_SIZE 30
 #define MPR_SELECTOR_SET_SIZE 30
 #define NEIGHBOR_SET_SIZE 30
+#define TWO_HOP_NEIGHBOR_SET_SIZE 30
 
 #define FREE_ENTRY 0
 #define FULL_ENTRY 1
+
+SemaphoreHandle_t olsrNeighborEmptySetLock;
+SemaphoreHandle_t olsrNeighborFullSetLock;
 typedef enum
 {
   WILL_NEVER   = 0,
@@ -62,10 +68,13 @@ typedef struct
   bool m_isAdvertised;
   olsrWillingness_t m_willingness;
 } olsrNeighborTuple_t;
-
+setIndex_t olsrFindNeighborByAddr(const olsrAddr_t addr);
+setIndex_t olsrInsertToNeighborSet(const olsrNeighborTuple_t* tuple);
 /*
 *********************Neighbor2Set*************************
 */
+SemaphoreHandle_t olsrTwoHopNeighborEmptySetLock;
+SemaphoreHandle_t olsrTwoHopNeighborFullSetLock;
 typedef struct
 {
   olsrAddr_t m_neighborAddr;
@@ -73,9 +82,14 @@ typedef struct
   olsrTime_t m_expirationTime; //need fix name
 } olsrTwoHopNeighborTuple_t;
 
+setIndex_t olsrFindTwoHopNeighborTuple(olsrAddr_t neighborAddr, olsrAddr_t twoHopNeighborAddr);
+setIndex_t olsrInsertToTwoHopNeighborSet(const olsrTwoHopNeighborTuple_t* tuple);
+bool olsrEraseTwoHopNeighborTuple(olsrAddr_t neighborAddr, olsrAddr_t twoHopNeighborAddr);
 /*
 *********************LinkSet*************************
 */
+SemaphoreHandle_t olsrLinkEmptySetLock;
+SemaphoreHandle_t olsrLinkFullSetLock;
 typedef struct
 {
   olsrAddr_t m_localAddr;
@@ -87,10 +101,14 @@ typedef struct
   olsrTime_t m_expirationTime;
 } olsrLinkTuple_t;
 
-
+setIndex_t olsrInsertToLinkSet(olsrLinkTuple_t *item);
+setIndex_t olsrFindInLinkByAddr(const olsrAddr_t addr);
 /*
 *********************MprSet*************************
 */
+
+SemaphoreHandle_t olsrMprEmptySetLock;
+SemaphoreHandle_t olsrMprFullSetLock;
 typedef struct 
 {
   olsrAddr_t m_addr;
@@ -107,6 +125,8 @@ typedef struct
 /*
 *********************TopologySet*************************
 */
+SemaphoreHandle_t olsrTopologyEmptySetLock;
+SemaphoreHandle_t olsrTopologyFullSetLock;
 typedef struct 
 {
   olsrAddr_t m_destAddr;
@@ -119,6 +139,8 @@ typedef struct
 /*
 *********************DuplicateSet*************************
 */
+SemaphoreHandle_t olsrDuplicateEmptySetLock;
+SemaphoreHandle_t olsrDuplicateFullSetLock;
 typedef struct
 {
   olsrAddr_t m_addr;
@@ -175,6 +197,14 @@ typedef struct
 } olsrNeighborSetItem_t;
 
 olsrNeighborSetItem_t olsrNeighborSet[NEIGHBOR_SET_SIZE];
+
+typedef struct
+{
+  olsrTwoHopNeighborTuple_t data;
+  setIndex_t next;
+} olsrTwoHopNeighborSetItem_t;
+
+olsrTwoHopNeighborSetItem_t olsrTwoHopNeighborSet[TWO_HOP_NEIGHBOR_SET_SIZE];
 
 typedef struct 
 {

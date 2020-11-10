@@ -12,7 +12,7 @@
 
 //const
 
-#define OLSR_HELLO_INTERVAL 2
+#define OLSR_HELLO_INTERVAL 2000
 #define OLSR_NEIGHB_HOLD_TIME (3*OLSR_HELLO_INTERVAL)
 #define TC_INTERVAL 500
 #define TS_INTERVAL 1000
@@ -33,12 +33,16 @@
 /// Asymmetric neighbor type.
 #define OLSR_MPR_NEIGH          2
 
+
+
 static dwDevice_t* dwm;
 extern uint16_t myAddress;
 extern xQueueHandle g_olsrSendQueue;
 extern xQueueHandle g_olsrRecvQueue;
 static uint16_t g_staticMessageSeq = 0;
+static uint16_t g_ansn = 0;
 static SemaphoreHandle_t olsrMessageSeqLock;
+static SemaphoreHandle_t olsrAnsnLock;
 packet_t rxPacket;
 //TODO define packet and message struct once, save space
 //debugging, to be deleted
@@ -46,14 +50,16 @@ packet_t rxPacket;
 
 
 //rxcallback
-void device_init(dwDevice_t *dev){
+void olsrDeviceInit(dwDevice_t *dev){
   dwm = dev;
   olsrMessageSeqLock = xSemaphoreCreateMutex();
+  olsrAnsnLock = xSemaphoreCreateMutex();
 }
 static uint16_t getSeqNumber()
 {
+  uint16_t retVal= 0;
   xSemaphoreTake(olsrMessageSeqLock,portMAX_DELAY);
-  uint16_t retVal = g_staticMessageSeq++;
+  retVal = g_staticMessageSeq++;
   xSemaphoreGive(olsrMessageSeqLock);
   return retVal;
 }
@@ -100,11 +106,240 @@ void olsr_tc_forward(olsrMessage_t* tc_message){
 void olsr_ts_process(const olsrMessage_t* ts_msg){
 
 }
+static void incrementAnsn()
+{
+  xSemaphoreTake(olsrAnsnLock,portMAX_DELAY);
+  g_ansn++;
+  xSemaphoreGive(olsrAnsnLock);
+}
+static void addNeighborTuple(const olsrNeighborTuple_t* tuple)
+{
+  olsrInsertToNeighborSet(tuple);
+  incrementAnsn();
+}
 
+static void addTwoHopNeighborTuple(const olsrTwoHopNeighborTuple_t* tuple)
+{
+  olsrInsertToTwoHopNeighborSet(tuple);
+}
+
+static void linkTupleAdded(olsrLinkTuple_t *tuple,uint8_t willingness)
+{
+  // Creates associated neighbor tuple
+  olsrNeighborTuple_t nbTuple;
+  nbTuple.m_neighborAddr = tuple->m_neighborAddr;
+  nbTuple.m_willingness = willingness;
+  olsrTime_t now = xTaskGetTickCount();
+  if(tuple->m_symTime >= now)
+    {
+      nbTuple.m_status = STATUS_SYM;
+    }
+  else
+    {
+      nbTuple.m_status = STATUS_NOT_SYM;
+    }
+  addNeighborTuple(&nbTuple);
+}
+static void linkTupleUpdated(olsrLinkTuple_t *tuple,uint8_t willingness)
+{
+  //// Each time a link tuple changes, the associated neighbor tuple must be recomputed
+  setIndex_t neighborTuple = olsrFindNeighborByAddr(tuple->m_neighborAddr);
+  if(neighborTuple==-1)
+    {
+      linkTupleAdded(tuple,willingness);
+      neighborTuple = olsrFindNeighborByAddr(tuple->m_neighborAddr);
+    }
+  
+  if(neighborTuple!=-1)
+    {
+      bool hasSymmetricLink = false;
+      setIndex_t linkTupleIter = olsrSetIndexEntry[LINK_SET_T][FULL_ENTRY];
+      while(linkTupleIter!=-1)
+        {
+          if(olsrLinkSet[linkTupleIter].data.m_neighborAddr == tuple->m_neighborAddr &&\
+          olsrLinkSet[linkTupleIter].data.m_symTime >= xTaskGetTickCount())
+            {
+              hasSymmetricLink = true;
+              break;
+            }
+          linkTupleIter = olsrLinkSet[linkTupleIter].next;
+        }
+      if(hasSymmetricLink)
+        {
+          olsrNeighborSet[neighborTuple].data.m_status = STATUS_SYM;
+        }
+      else
+        {
+          olsrNeighborSet[neighborTuple].data.m_status = STATUS_NOT_SYM;
+        }
+      
+    }
+  else
+    {
+      DEBUG_PRINT_OLSR_LINK("bad alloc in linkTupleUpdated func!\n");
+    }
+  
+
+}
+static void linkSensing(const olsrMessage_t* helloMsg)
+{
+  configASSERT(helloMsg->m_messageHeader.m_vTime>0);
+  xSemaphoreTake(olsrLinkFullSetLock,portMAX_DELAY); //Seamphore Take
+  setIndex_t linkTuple = olsrFindInLinkByAddr(helloMsg->m_messageHeader.m_originatorAddress);
+  olsrTime_t now = xTaskGetTickCount();
+  bool created = false, updated = false;
+
+  if(linkTuple == -1)
+    {
+      olsrLinkTuple_t newLinkTuple;
+      newLinkTuple.m_localAddr = myAddress;
+      newLinkTuple.m_neighborAddr = helloMsg->m_messageHeader.m_originatorAddress;
+      newLinkTuple.m_symTime = now - M2T(1000);
+      newLinkTuple.m_expirationTime = now + helloMsg->m_messageHeader.m_vTime*1000;
+      linkTuple = olsrInsertToLinkSet(&newLinkTuple);
+      if(linkTuple==-1)
+        {
+          DEBUG_PRINT_OLSR_LINK("can not malloc from link set by Function[linkSensing]\n");
+          return;
+        }
+      created = true;
+    }
+  else
+    {
+      updated = true;
+    }
+  olsrLinkSet[linkTuple].data.m_asymTime = now +helloMsg->m_messageHeader.m_vTime*1000;
+  olsrHelloMessage_t* helloMsgBody = (olsrHelloMessage_t*)(helloMsg->m_messagePayload);
+  for(uint8_t i = 0;i < helloMsgBody->m_helloHeader.m_linkMessageNumber;i++)
+    {
+      uint8_t lt = helloMsgBody->m_linkMessage[i].m_linkCode & 0x03;
+      uint8_t nt = (helloMsgBody->m_linkMessage[i].m_linkCode >> 2 ) & 0x03;
+
+      if((lt == OLSR_SYM_LINK && nt == OLSR_NOT_NEIGH)\
+      ||(nt != OLSR_SYM_NEIGH && nt != OLSR_MPR_NEIGH\
+      && nt != OLSR_NOT_NEIGH))
+        {
+          continue;
+        }
+      if(helloMsgBody->m_linkMessage[i].m_addresses == myAddress)
+        {
+          if(lt == OLSR_LOST_LINK)
+            {
+              olsrLinkSet[linkTuple].data.m_symTime = now - M2T(1000);
+              updated = true;
+            }
+          else if(lt == OLSR_SYM_LINK ||lt == OLSR_ASYM_LINK)
+            {
+              olsrLinkSet[linkTuple].data.m_symTime = now +helloMsg->m_messageHeader.m_vTime*1000;
+              olsrLinkSet[linkTuple].data.m_expirationTime = olsrLinkSet[linkTuple].data.m_symTime+OLSR_NEIGHB_HOLD_TIME*1000;
+              updated = true;
+            }
+          else
+            {
+              DEBUG_PRINT_OLSR_LINK("BAD LINK");
+            }  
+        }
+      else
+        {
+          DEBUG_PRINT_OLSR_LINK("this %d is not equal to myaddress\n",helloMsgBody->m_linkMessage[i].m_addresses);
+        }      
+    }
+  olsrLinkSet[linkTuple].data.m_expirationTime = olsrLinkSet[linkTuple].data.m_asymTime > \
+                                                olsrLinkSet[linkTuple].data.m_expirationTime? \
+                                                olsrLinkSet[linkTuple].data.m_asymTime:\
+                                                olsrLinkSet[linkTuple].data.m_expirationTime;
+  xSemaphoreTake(olsrNeighborFullSetLock,portMAX_DELAY);
+  if(updated)
+    {
+      linkTupleUpdated(&olsrLinkSet[linkTuple].data,helloMsgBody->m_helloHeader.m_willingness);
+    }
+  if(created)
+    {
+      linkTupleAdded(&olsrLinkSet[linkTuple].data,helloMsgBody->m_helloHeader.m_willingness); // same addr?
+      //del
+    }
+  xSemaphoreGive(olsrNeighborFullSetLock); 
+  xSemaphoreGive(olsrLinkFullSetLock); //Seamphore Give
+}
+
+void populateNeighborSet(const olsrMessage_t* helloMsg)
+{
+  xSemaphoreTake(olsrNeighborFullSetLock,portMAX_DELAY);
+  setIndex_t nbTuple = olsrFindNeighborByAddr(helloMsg->m_messageHeader.m_originatorAddress);
+  if(nbTuple != -1)
+    {
+      olsrNeighborSet[nbTuple].data.m_willingness = ((olsrHelloMessageHeader_t *)helloMsg->m_messagePayload)->m_willingness;
+    }
+  xSemaphoreGive(olsrNeighborFullSetLock); 
+}
+
+void PopulateTwoHopNeighborSet(const olsrMessage_t* helloMsg)
+{
+  xSemaphoreTake(olsrLinkFullSetLock,portMAX_DELAY);
+  xSemaphoreTake(olsrTwoHopNeighborFullSetLock,portMAX_DELAY);
+  olsrTime_t now = xTaskGetTickCount();
+  olsrAddr_t sender = helloMsg->m_messageHeader.m_originatorAddress;
+  setIndex_t linkTuple = olsrFindInLinkByAddr(sender);
+  if(linkTuple != -1)
+    {
+      olsrHelloMessage_t* helloMsgBody = (olsrHelloMessage_t*)helloMsg->m_messagePayload;
+      for(int i = 0;i<helloMsgBody->m_helloHeader.m_linkMessageNumber;i++)
+        {
+          uint8_t nbType = (helloMsgBody->m_linkMessage[i].m_linkCode >> 2) & 0x3;
+          olsrAddr_t candidate = helloMsgBody->m_linkMessage[i].m_addresses;
+          if(nbType == OLSR_SYM_NEIGH || nbType == OLSR_MPR_NEIGH)
+            {
+              if(candidate == myAddress)
+                {
+                  continue;
+                }
+              setIndex_t twoHopNeighborTuple = olsrFindTwoHopNeighborTuple(sender,candidate);
+              if(twoHopNeighborTuple != -1)
+                {
+                  olsrTwoHopNeighborSet[twoHopNeighborTuple].data.m_expirationTime = now+\
+                                                    helloMsg->m_messageHeader.m_vTime*1000;
+                }
+              else
+                {
+                  olsrTwoHopNeighborTuple_t newTuple;
+                  newTuple.m_neighborAddr = sender;
+                  newTuple.m_twoHopNeighborAddr = candidate;
+                  newTuple.m_expirationTime = now+helloMsg->m_messageHeader.m_vTime*1000;
+                  addTwoHopNeighborTuple(&newTuple);
+                }
+              
+            }
+          else if(nbType == OLSR_NOT_NEIGH)
+            {
+              olsrEraseTwoHopNeighborTuple(sender,candidate);
+            }
+          else
+            {
+              DEBUG_PRINT_OLSR_NEIGHBOR2("bad neighbor type in func [PopulateTwoHopNeighborSet]\n");
+            }
+          
+        }
+    }
+  else
+    {
+      DEBUG_PRINT_OLSR_NEIGHBOR2("can not found link tuple\n");
+    }
+  xSemaphoreGive(olsrTwoHopNeighborFullSetLock);
+  xSemaphoreGive(olsrLinkFullSetLock);
+}
+
+void olsrProcessHello(const olsrMessage_t* helloMsg)
+{
+  linkSensing(helloMsg);
+  populateNeighborSet(helloMsg);
+  PopulateTwoHopNeighborSet(helloMsg);
+  // MprComputation();
+
+}
 //
 
 //switch to tc|hello|ts process
-void olsr_packet_dispatch(const packet_t* rxPacket)
+void olsrPacketDispatch(const packet_t* rxPacket)
 {
   DEBUG_PRINT_OLSR_SYSTEM("PACKET_DISPATCH\n");  
   olsrPacket_t* olsrPacket = (olsrPacket_t *)rxPacket->payload;
@@ -127,7 +362,7 @@ void olsr_packet_dispatch(const packet_t* rxPacket)
         case HELLO_MESSAGE:
             DEBUG_PRINT_OLSR_RECEIVE("HELLO_MESSAGE\n");
             // olsr_process_hello_message(olsr_message);
-            // olsrProcessHello(olsrMessage);
+            olsrProcessHello(olsrMessage);
             break;
         case TC_MESSAGE:
             DEBUG_PRINT_OLSR_RECEIVE("TC_MESSAGE\n");
@@ -152,9 +387,6 @@ void olsr_packet_dispatch(const packet_t* rxPacket)
 }
 
 //send related function
-void olsr_generate_ts(olsrMessage_t *ts_msg)
-{
-}
 
 void olsrSendHello()
 {
@@ -170,15 +402,15 @@ void olsrSendHello()
   msg.m_messageHeader.m_hopCount = 0;
   msg.m_messageHeader.m_messageSeq = getSeqNumber();
   //hello message
-  olsrHeloMessage_t helloMessage;
+  olsrHelloMessage_t helloMessage;
   helloMessage.m_helloHeader.m_hTime = OLSR_HELLO_INTERVAL; //hello's header on packet
   helloMessage.m_helloHeader.m_willingness = WILL_ALWAYS;
   helloMessage.m_helloHeader.m_linkMessageNumber = 0;
 
   //loop
+  xSemaphoreTake(olsrLinkFullSetLock,portMAX_DELAY);
   setIndex_t linkTupleIndex = olsrSetIndexEntry[LINK_SET_T][FULL_ENTRY];
   olsrTime_t now = xTaskGetTickCount();
-  
   while(linkTupleIndex!=-1)
     {
       if(!(olsrLinkSet[linkTupleIndex].data.m_localAddr == myAddress &&\
@@ -201,7 +433,7 @@ void olsrSendHello()
         {
           linkType = OLSR_LOST_LINK;//3
         }
-      if(olsrFindMprByAddr(olsrLinkSet[linkTupleIndex].data.m_localAddr))
+      if(olsrFindMprByAddr(olsrLinkSet[linkTupleIndex].data.m_neighborAddr))
         {
            nbType = OLSR_MPR_NEIGH;//2
         }
@@ -212,7 +444,7 @@ void olsrSendHello()
           while(neighborTupleIndex!=-1)
             {
               if(olsrNeighborSet[neighborTupleIndex].data.m_neighborAddr ==\
-              olsrLinkSet[linkTupleIndex].data.m_localAddr) // this linkTuple Addr is in NighborSet
+              olsrLinkSet[linkTupleIndex].data.m_neighborAddr) // this linkTuple Addr is in NighborSet
                 {
                   if(olsrNeighborSet[neighborTupleIndex].data.m_status == STATUS_SYM)
                     {
@@ -244,15 +476,14 @@ void olsrSendHello()
           helloMessage.m_linkMessage[helloMessage.m_helloHeader.m_linkMessageNumber++] = linkMessage;
           linkTupleIndex = olsrLinkSet[linkTupleIndex].next;
     }
+  xSemaphoreGive(olsrLinkFullSetLock);
   uint16_t writeSize = sizeof(olsrHelloMessageHeader_t)+helloMessage.m_helloHeader.m_linkMessageNumber*\
                        sizeof(olsrLinkMessage_t);
   msg.m_messageHeader.m_messageSize +=  writeSize;                 
   memcpy(msg.m_messagePayload,&helloMessage,writeSize);
   xQueueSend(g_olsrSendQueue,&msg,portMAX_DELAY);
 }
-static void olsr_generate_tc(olsrMessage_t *tc_message){
-  //write header
-}
+
 
 //process hello
 
@@ -267,15 +498,9 @@ void olsrHelloTask(void *ptr){
     }
 }
 void olsr_send_tc_to_queue(){
-    olsrMessage_t t;
-    olsr_generate_tc(&t);
-    xQueueSend(g_olsrSendQueue,&t,portMAX_DELAY);
     DEBUG_PRINT_OLSR_SYSTEM("TC_SEND TO QUEUE\n");
 }
 void olsr_send_ts_to_queue(){
-    olsrMessage_t ts_msg={0};
-    olsr_generate_ts(&ts_msg);
-    xQueueSend(g_olsrSendQueue,&ts_msg,portMAX_DELAY);
     DEBUG_PRINT_OLSR_SEND("TS_SEND TO QUEUE\n");
 }
 
@@ -354,13 +579,13 @@ void olsrSendTask(void *ptr)
       vTaskDelay(20);
     }
 }
-void olsr_recv_task(void *ptr){
+void olsrRecvTask(void *ptr){
     DEBUG_PRINT_OLSR_RECEIVE("RECV TASK START\n");
     static packet_t recvPacket;
     while(true){
       while(xQueueReceive(g_olsrRecvQueue,&recvPacket,0)){
         DEBUG_PRINT_OLSR_RECEIVE("RECV FROM QUEUE\n");
-        olsr_packet_dispatch(&recvPacket);
+        olsrPacketDispatch(&recvPacket);
         olsr_routing_table_compute();
       }
       vTaskDelay(500);
