@@ -21,6 +21,7 @@ typedef uint16_t olsrAddr_t;
 typedef short olsrDist_t;
 typedef short setIndex_t;
 
+
 #define OLSR_SETS_NUM 8
 #define TOPOLOGY_SET_T 0
 #define MPR_SET_T 1
@@ -40,9 +41,6 @@ typedef short setIndex_t;
 #define MPR_SELECTOR_SET_SIZE 30
 #define NEIGHBOR_SET_SIZE 30
 #define TWO_HOP_NEIGHBOR_SET_SIZE 30
-
-#define FREE_ENTRY 0
-#define FULL_ENTRY 1
 
 SemaphoreHandle_t olsrNeighborEmptySetLock;
 SemaphoreHandle_t olsrNeighborFullSetLock;
@@ -68,8 +66,12 @@ typedef struct
   bool m_isAdvertised;
   olsrWillingness_t m_willingness;
 } olsrNeighborTuple_t;
-setIndex_t olsrFindNeighborByAddr(const olsrAddr_t addr);
-setIndex_t olsrInsertToNeighborSet(const olsrNeighborTuple_t* tuple);
+
+typedef struct 
+{
+  olsrNeighborTuple_t data;
+  setIndex_t next;
+} olsrNeighborSetItem_t;
 /*
 *********************Neighbor2Set*************************
 */
@@ -82,9 +84,13 @@ typedef struct
   olsrTime_t m_expirationTime; //need fix name
 } olsrTwoHopNeighborTuple_t;
 
-setIndex_t olsrFindTwoHopNeighborTuple(olsrAddr_t neighborAddr, olsrAddr_t twoHopNeighborAddr);
-setIndex_t olsrInsertToTwoHopNeighborSet(const olsrTwoHopNeighborTuple_t* tuple);
-bool olsrEraseTwoHopNeighborTuple(olsrAddr_t neighborAddr, olsrAddr_t twoHopNeighborAddr);
+typedef struct
+{
+  olsrTwoHopNeighborTuple_t data;
+  setIndex_t next;
+} olsrTwoHopNeighborSetItem_t;
+
+
 /*
 *********************LinkSet*************************
 */
@@ -101,8 +107,13 @@ typedef struct
   olsrTime_t m_expirationTime;
 } olsrLinkTuple_t;
 
-setIndex_t olsrInsertToLinkSet(olsrLinkTuple_t *item);
-setIndex_t olsrFindInLinkByAddr(const olsrAddr_t addr);
+typedef struct 
+{
+  olsrLinkTuple_t data;
+  setIndex_t next;
+} olsrLinkSetItem_t;
+
+
 /*
 *********************MprSet*************************
 */
@@ -114,6 +125,11 @@ typedef struct
   olsrAddr_t m_addr;
 } olsrMprTuple_t;
 
+typedef struct 
+{
+  olsrMprTuple_t data;
+  setIndex_t next;
+} olsrMprSetItem_t;
 /*
 *********************MprSelectorSet*************************
 */
@@ -122,6 +138,13 @@ typedef struct
   olsrAddr_t m_addr;
   olsrTime_t m_expirationTime;
 } olsrMprSelectorTuple_t;
+
+typedef struct 
+{
+  olsrMprSelectorTuple_t data;
+  setIndex_t next;
+} olsrMprSelectorSetItem_t;
+
 /*
 *********************TopologySet*************************
 */
@@ -136,6 +159,11 @@ typedef struct
   olsrTime_t m_expirationTime;
 } olsrTopologyTuple_t;
 
+typedef struct 
+{
+  olsrTopologyTuple_t data;
+  setIndex_t next;
+} olsrTopologySetItem_t;
 /*
 *********************DuplicateSet*************************
 */
@@ -149,15 +177,26 @@ typedef struct
   olsrTime_t m_expirationTime;
 } olsrDuplicateTuple_t;
 
+typedef struct 
+{
+  olsrDuplicateTuple_t data;
+  setIndex_t next;
+} olsrDuplicateSetItem_t;
 /*
 *********************TimestampSet*************************
 */
+
 typedef struct 
 {
   uint16_t m_seqenceNumber;
   dwTime_t m_timestamp;
 } olsrTimestampTuple_t;
 
+typedef struct 
+{
+  olsrTimestampTuple_t data;
+  setIndex_t next;
+} olsrTimestampSetItem_t;
 /*
 *********************RoutingTable*************************
 */
@@ -172,80 +211,142 @@ typedef struct
 /*
 ********************Set Definition*******************
 */
-setIndex_t olsrSetIndexEntry[OLSR_SETS_NUM][2]; 
+
+
 
 typedef struct 
 {
-  olsrTopologyTuple_t data;
-  setIndex_t next;
-} olsrTopologySetItem_t;
+  olsrTopologySetItem_t setData[TOPOLOGY_SET_SIZE];
+  setIndex_t freeQueueEntry;
+  setIndex_t fullQueueEntry;
+} olsrTopologySet_t;
 
-olsrTopologySetItem_t olsrTopologySet[TOPOLOGY_SET_SIZE];
-
-typedef struct 
-{
-  olsrLinkTuple_t data;
-  setIndex_t next;
-} olsrLinkSetItem_t;
-
-olsrLinkSetItem_t olsrLinkSet[LINK_SET_SIZE];
-
-typedef struct 
-{
-  olsrNeighborTuple_t data;
-  setIndex_t next;
-} olsrNeighborSetItem_t;
-
-olsrNeighborSetItem_t olsrNeighborSet[NEIGHBOR_SET_SIZE];
-olsrNeighborSetItem_t N[NEIGHBOR_SET_SIZE];
-setIndex_t mprUtilNeighborEntry;
 
 typedef struct
 {
-  olsrTwoHopNeighborTuple_t data;
-  setIndex_t next;
-} olsrTwoHopNeighborSetItem_t;
-
-olsrTwoHopNeighborSetItem_t olsrTwoHopNeighborSet[TWO_HOP_NEIGHBOR_SET_SIZE];
-olsrNeighborSetItem_t N2[TWO_HOP_NEIGHBOR_SET_SIZE];
-setIndex_t mprUtilTwoHopNeighborEntry;
-
-typedef struct 
-{
-  olsrDuplicateTuple_t data;
-  setIndex_t next;
-} olsrDuplicateSetItem_t;
-
-olsrDuplicateSetItem_t olsrDuplicateSet[DUPLICATE_SET_SIZE];
-
-typedef struct 
-{
-  olsrMprTuple_t data;
-  setIndex_t next;
-} olsrMprSetItem_t;
-
-olsrMprSetItem_t olsrMprSet[MPR_SET_SIZE];
-
-typedef struct 
-{
-  olsrMprSelectorTuple_t data;
-  setIndex_t next;
-} olsrMprSelectorSetItem_t;
-
-olsrMprSelectorSetItem_t olsrMprSelectorSet[MPR_SELECTOR_SET_SIZE];
+  olsrLinkSetItem_t setData[LINK_SET_SIZE];
+  setIndex_t freeQueueEntry;
+  setIndex_t fullQueueEntry; 
+} olsrLinkSet_t;
 
 
 typedef struct 
 {
-  olsrTimestampTuple_t data;
-  setIndex_t next;
-} olsrTimestampSetItem_t;
-
-olsrTimestampSetItem_t olsrTimestampSet[TIMESTAMP_SET_SIZE];
-
-
-bool olsrInsertToTopologySet(olsrTopologyTuple_t *tcTuple);
-bool olsrFindMprByAddr(olsrAddr_t addr);
+  olsrNeighborSetItem_t setData[NEIGHBOR_SET_SIZE];
+  setIndex_t freeQueueEntry;
+  setIndex_t fullQueueEntry; 
+} olsrNeighborSet_t;
 
 
+typedef struct 
+{
+  olsrTwoHopNeighborSetItem_t setData[TWO_HOP_NEIGHBOR_SET_SIZE];
+  setIndex_t freeQueueEntry;
+  setIndex_t fullQueueEntry;
+} olsrTwoHopNeighborSet_t;
+
+
+typedef struct
+{
+  olsrDuplicateSetItem_t setData[DUPLICATE_SET_SIZE];
+  setIndex_t freeQueueEntry;
+  setIndex_t fullQueueEntry;
+} olsrDuplicateSet_t;
+
+
+typedef struct 
+{
+  olsrMprSetItem_t setData[MPR_SET_SIZE];
+  setIndex_t freeQueueEntry;
+  setIndex_t fullQueueEntry;
+} olsrMprSet_t;
+
+
+typedef struct 
+{
+  olsrMprSelectorSetItem_t setData[MPR_SELECTOR_SET_SIZE];
+  setIndex_t freeQueueEntry;
+  setIndex_t fullQueueEntry; 
+} olsrMprSelectorSet_t;
+
+
+
+typedef struct
+{
+  olsrTimestampSetItem_t setData[TIMESTAMP_SET_SIZE];
+  setIndex_t freeQueueEntry;
+  setIndex_t fullQueueEntry;
+} olsrTimestampSet_t;
+
+
+olsrTopologySet_t olsrTopologySet;
+
+olsrNeighborSet_t olsrNeighborSet;
+
+olsrLinkSet_t olsrLinkSet;
+
+olsrTwoHopNeighborSet_t olsrTwoHopNeighborSet;
+
+olsrDuplicateSet_t olsrDuplicateSet;
+
+olsrMprSet_t olsrMprSet;
+
+olsrMprSelectorSet_t olsrMprSelectorSet;
+
+/*linkSet*/
+setIndex_t olsrInsertToLinkSet(olsrLinkSet_t *linkSet, olsrLinkTuple_t *item);
+
+setIndex_t olsrFindInLinkByAddr(olsrLinkSet_t *linkSet, const olsrAddr_t addr);
+
+void olsrPrintLinkSet(olsrLinkSet_t *linkSet);
+
+setIndex_t olsrFindSymLinkTuple(olsrLinkSet_t *linkSet,olsrAddr_t sender,olsrTime_t now);
+
+/* twoHopNeighbor*/
+void olsrTwoHopNeighborSetInit(olsrTwoHopNeighborSet_t *twoHopNeighborSet);
+
+setIndex_t olsrFindTwoHopNeighborTuple(olsrTwoHopNeighborSet_t *twoHopNeighborSet,\
+                                       olsrAddr_t neighborAddr,\
+                                       olsrAddr_t twoHopNeighborAddr);
+
+setIndex_t olsrInsertToTwoHopNeighborSet(olsrTwoHopNeighborSet_t* twoHopNeighborSet,\
+                                        const olsrTwoHopNeighborTuple_t* tuple);
+
+setIndex_t olsrEraseTwoHopNeighborTuple(olsrTwoHopNeighborSet_t* twoHopNeighborSet,\
+                                  olsrAddr_t neighborAddr,\
+                                  olsrAddr_t twoHopNeighborAddr);
+setIndex_t olsrEraseTwoHopNeighborTupleByTuple(olsrTwoHopNeighborSet_t *twoHopNeighborSet,\
+                                        olsrTwoHopNeighborTuple_t *tuple);
+
+/* Neighbor*/
+setIndex_t olsrFindNeighborByAddr(olsrNeighborSet_t* neighborSet,\
+                                  olsrAddr_t addr);
+
+setIndex_t olsrInsertToNeighborSet(olsrNeighborSet_t* neighborSet,\
+                                  const olsrNeighborTuple_t* tuple);
+
+void olsrNeighborSetInit(olsrNeighborSet_t *neighborSet);
+
+void olsrPrintNeighborSet(olsrNeighborSet_t *neighborSet);
+
+/*topologySet */
+bool olsrInsertToTopologySet(olsrTopologySet_t *topologySet,\
+                              olsrTopologyTuple_t *tcTuple);
+
+setIndex_t olsrFindNewerTopologyTuple(olsrTopologySet_t *topologyset,\
+                                      olsrAddr_t originator,\
+                                      uint16_t ansn);
+
+/*mpr*/
+void olsrMprSetInit(olsrMprSet_t *mprSet);
+bool olsrFindMprByAddr(olsrMprSet_t *mprSet,olsrAddr_t addr);
+setIndex_t olsrInsertToMprSet(olsrMprSet_t *MprSet,olsrMprTuple_t *item);
+
+/*ms*/
+setIndex_t olsrInsertToMprSelectorSet(olsrMprSelectorSet_t *mprSelectorSet,\
+                                      olsrMprSelectorTuple_t *item);
+
+setIndex_t olsrFindInMprSelectorSet(olsrMprSelectorSet_t *mprSelectorSet, olsrAddr_t addr);
+
+bool olsrMprSelectorSetIsEmpty();
 #endif //__OLSR_STRUCT_H__

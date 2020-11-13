@@ -90,6 +90,7 @@
 #define LINK_ADDRESS_MAX_NUM 10
 #define LINK_MESSAGE_MAX_NUM ((MESSAGE_PAYLOAD_MAX_SIZE-sizeof(olsrHelloMessageHeader_t))\
                               /sizeof(olsrLinkMessage_t))
+#define TC_PAYLOAD_MAX_NUM ((MESSAGE_PAYLOAD_MAX_SIZE-2)/sizeof(olsrTopologyMessageUint_t))
 
 typedef struct{
     uint16_t m_packetLength;
@@ -150,73 +151,17 @@ typedef struct{
 } __attribute__((packed)) olsrHelloMessage_t;
 
 //tc
-// typedef struct 
-// {
-//     /* data */
-//     uint16_t address;
-//     #ifdef DIS_OLSR
-//     uint16_t distance;
-//     #endif
-// } __attribute__((packed)) olsr_topology_message_body_unit;
+typedef struct 
+{
+    olsrAddr_t m_address;
+    olsrDist_t m_distance;
+} __attribute__((packed)) olsrTopologyMessageUint_t;
 
-// typedef struct 
-// {
-//     /* data */
-//     uint16_t ansn;
-//     //42
-//     olsr_topology_message_body_unit content[tcAddrMaxCount];
-// } __attribute__((packed)) olsr_topology_message_t;
+typedef struct 
+{
+  uint16_t m_ansn;
+  olsrTopologyMessageUint_t m_content[TC_PAYLOAD_MAX_NUM];
+} __attribute__((packed)) olsrTopologyMessage_t;
 
-
-// //time stamp (ts) message
-// typedef struct{
-//    message_type_t m_messageType;
-//    uint8_t dwtime_high8;
-//    uint16_t m_messageSize;
-//    uint16_t sourceAddr;
-//    uint16_t m_messageSeq;
-//    uint16_t velocity;//in cm
-//    uint32_t dwtime_low32;
-// } __attribute__((packed)) olsr_ts_message_hdr_t; //14
-
-// typedef struct { 
-//    uint16_t tsAddr;
-//    uint16_t m_messageSeq;
-//    uint32_t dwtime_low32;
-//    uint8_t dwtime_high8;
-// } __attribute__((packed)) olsr_ts_message_bodyunit_t;//9
-
-// typedef struct {
-//     olsr_ts_message_hdr_t ts_header;
-//     olsr_ts_message_bodyunit_t content[timeStampMaxCount];
-// } __attribute__((packed)) olsr_ts_message_t;
-
-
-// //link type
-// typedef enum
-// {
-//   UNSPEC_LINK = 0,
-//   ASYM_LINK   = 1,
-//   SYM_LINK    = 2,
-//   LOST_LINK   = 3,
-// } link_type_t;
-
-// inline uint8_t
-// olsr_link_code(link_type_t lt, olsrNeighborType_t nt)
-// {
-//   return ((nt & 0x3) << 2) | (lt & 0x3);
-// }
-
-// inline link_type_t
-// olsr_link_type(uint8_t link_code)
-// {
-//   return link_code & 0x3;
-// }
-
-// inline olsrNeighborType_t
-// olsr_neighbor_type(uint8_t link_code)
-// {
-//   return (link_code >> 2) & 0x3;
-// }
 
 #endif //__OLSR_PACKET_H__

@@ -36,7 +36,7 @@ static void olsrHelloTaskInit()
 static void OLSR_TC_TASK_INIT()
 {
     DEBUG_PRINT_OLSR_SYSTEM("START_OLSR_TC_TASK_INIT\n");
-    if(xTaskCreate(olsr_tc_task, "OLSR_TC", 5*configMINIMAL_STACK_SIZE, NULL,
+    if(xTaskCreate(olsrTcTask, "OLSR_TC", 5*configMINIMAL_STACK_SIZE, NULL,
                     LPS_DECK_TASK_PRI, NULL)==pdPASS){
                         DEBUG_PRINT_OLSR_SYSTEM("TC TASK CREATE SUCCESSFUL\n");
                     }else{
