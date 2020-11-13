@@ -88,17 +88,19 @@ static bool olsrTopologySetFree(olsrTopologySet_t *topologySet,\
     return false;
 }
 
-bool olsrInsertToTopologySet(olsrTopologySet_t *topologySet,\
-                             olsrTopologyTuple_t *tcTuple)
+setIndex_t olsrInsertToTopologySet(olsrTopologySet_t *topologySet,\
+                             const olsrTopologyTuple_t *tcTuple)
 {
-  if(tcTuple==NULL) return false;
   setIndex_t candidate = olsrTopologySetMalloc(topologySet); 
-  if(candidate == -1) return false;
-  topologySet->setData[candidate].data.m_destAddr = tcTuple->m_destAddr;
-  topologySet->setData[candidate].data.m_distance = tcTuple->m_distance;
-  topologySet->setData[candidate].data.m_expirationTime = tcTuple->m_expirationTime;
-  topologySet->setData[candidate].data.m_lastAddr = tcTuple->m_lastAddr;
-  return true;
+  if(candidate != -1)
+    {
+      memcpy(&topologySet->setData[candidate].data,tcTuple,sizeof(olsrTopologyTuple_t));
+    }
+  else
+    {
+      DEBUG_PRINT_OLSR_TC("bad alloc in function[olsrInsertToTopologySet]\n");
+    }
+  return candidate;
 }
 
 void olsrPrintTopologySet(olsrTopologySet_t *topologySet)
@@ -118,7 +120,53 @@ setIndex_t olsrFindNewerTopologyTuple(olsrTopologySet_t *topologyset,\
                                       olsrAddr_t originator,\
                                       uint16_t ansn)
 {
-  
+  setIndex_t candidate = topologyset->fullQueueEntry;
+  while(candidate != -1)
+    {
+      olsrTopologySetItem_t item = topologyset->setData[candidate];
+      if(item.data.m_lastAddr == originator && item.data.m_seqenceNumber > ansn)
+        {
+          break;
+        }
+      candidate = item.next;
+    }
+  return candidate;
+}
+
+void olsrEraseOlderTopologyTuples(olsrTopologySet_t *topologyset,\
+                                  olsrAddr_t originator,\
+                                  uint16_t ansn)
+{
+  setIndex_t it = topologyset->fullQueueEntry;
+  while(it != -1)
+    {
+      olsrTopologySetItem_t item = topologyset->setData[it];
+      if(item.data.m_lastAddr == originator && item.data.m_seqenceNumber < ansn)
+        {
+          setIndex_t del = it;
+          it = item.next;
+          olsrTopologySetFree(topologyset,del);
+          continue;
+        }
+      it = item.next;
+    }
+}
+
+setIndex_t olsrFindTopologyTuple(olsrTopologySet_t *topologyset,\
+                                 olsrAddr_t destAddr,\
+                                 olsrAddr_t lastAddr)
+{
+  setIndex_t candidate = topologyset->fullQueueEntry;
+  while(candidate != -1)
+    {
+      olsrTopologySetItem_t item = topologyset->setData[candidate];
+      if(item.data.m_lastAddr == lastAddr && item.data.m_destAddr == destAddr)
+        {
+          break;
+        }
+      candidate = item.next;
+    }
+  return candidate;
 }
 /*
 ************************LinkSetFunctions********************
@@ -211,7 +259,7 @@ setIndex_t olsrFindInLinkByAddr(olsrLinkSet_t *linkSet,const olsrAddr_t addr)
     }
   return it;
 }
-setIndex_t olsrInsertToLinkSet(olsrLinkSet_t *linkSet,olsrLinkTuple_t *item)
+setIndex_t olsrInsertToLinkSet(olsrLinkSet_t *linkSet,const olsrLinkTuple_t *item)
 {
   setIndex_t candidate = olsrLinkSetMalloc(linkSet);
   if(candidate!=-1)
@@ -241,7 +289,7 @@ setIndex_t olsrFindSymLinkTuple(olsrLinkSet_t *linkSet,olsrAddr_t sender,olsrTim
   setIndex_t candidate = linkSet->fullQueueEntry;
   while(candidate != -1)
     {
-      olsrLinkSetItem_t tmp = linkSet[candidate].setData;
+      olsrLinkSetItem_t tmp = linkSet->setData[candidate];
       if(tmp.data.m_neighborAddr == sender && tmp.data.m_symTime > now)
         {
           break;
@@ -573,7 +621,7 @@ static bool olsrMprSetFree(olsrMprSet_t *mprSet, setIndex_t delItem)
     }
     return false;
 }
-setIndex_t olsrInsertToMprSet(olsrMprSet_t *MprSet,olsrMprTuple_t *item)
+setIndex_t olsrInsertToMprSet(olsrMprSet_t *MprSet,const olsrMprTuple_t *item)
 {
   setIndex_t candidate = olsrMprSetMalloc(MprSet);
   if(candidate!=-1)
@@ -660,7 +708,7 @@ static bool olsrMprSelectorSetFree(olsrMprSelectorSet_t *mprSelectorSet, setInde
               mprSelectorSet->setData[pre].next = mprSelectorSet->setData[delItem].next;
               //insert to empty queue
               mprSelectorSet->setData[delItem].next = mprSelectorSet->freeQueueEntry;
-              mprmprSelectorSetSet->freeQueueEntry = delItem;
+              mprSelectorSet->freeQueueEntry = delItem;
               return true;
             }
           pre = mprSelectorSet->setData[pre].next;
@@ -669,9 +717,9 @@ static bool olsrMprSelectorSetFree(olsrMprSelectorSet_t *mprSelectorSet, setInde
     return false;
 }
 
-setIndex_t olsrInsertToMprSelectorSet(olsrMprSelectorSet_t *mprSelectorSet,olsrMprSelectorTuple_t *item)
+setIndex_t olsrInsertToMprSelectorSet(olsrMprSelectorSet_t *mprSelectorSet,const olsrMprSelectorTuple_t *item)
 {
-  setIndex_t candidate = olsrMprSetMalloc(mprSelectorSet);
+  setIndex_t candidate = olsrMprSelectorSetMalloc(mprSelectorSet);
   if(candidate!=-1)
     {
       memcpy(&mprSelectorSet->setData[candidate].data,item,sizeof(olsrMprSelectorTuple_t));

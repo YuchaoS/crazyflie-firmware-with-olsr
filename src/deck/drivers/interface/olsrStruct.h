@@ -294,7 +294,7 @@ olsrMprSet_t olsrMprSet;
 olsrMprSelectorSet_t olsrMprSelectorSet;
 
 /*linkSet*/
-setIndex_t olsrInsertToLinkSet(olsrLinkSet_t *linkSet, olsrLinkTuple_t *item);
+setIndex_t olsrInsertToLinkSet(olsrLinkSet_t *linkSet, const olsrLinkTuple_t *item);
 
 setIndex_t olsrFindInLinkByAddr(olsrLinkSet_t *linkSet, const olsrAddr_t addr);
 
@@ -330,21 +330,29 @@ void olsrNeighborSetInit(olsrNeighborSet_t *neighborSet);
 void olsrPrintNeighborSet(olsrNeighborSet_t *neighborSet);
 
 /*topologySet */
-bool olsrInsertToTopologySet(olsrTopologySet_t *topologySet,\
-                              olsrTopologyTuple_t *tcTuple);
+setIndex_t olsrInsertToTopologySet(olsrTopologySet_t *topologySet,\
+                              const olsrTopologyTuple_t *tcTuple);
 
 setIndex_t olsrFindNewerTopologyTuple(olsrTopologySet_t *topologyset,\
                                       olsrAddr_t originator,\
                                       uint16_t ansn);
 
+void olsrEraseOlderTopologyTuples(olsrTopologySet_t *topologyset,\
+                                  olsrAddr_t originator,\
+                                  uint16_t ansn);
+
+setIndex_t olsrFindTopologyTuple(olsrTopologySet_t *topologyset,\
+                                 olsrAddr_t destAddr,\
+                                 olsrAddr_t lastAddr);
+
 /*mpr*/
 void olsrMprSetInit(olsrMprSet_t *mprSet);
 bool olsrFindMprByAddr(olsrMprSet_t *mprSet,olsrAddr_t addr);
-setIndex_t olsrInsertToMprSet(olsrMprSet_t *MprSet,olsrMprTuple_t *item);
+setIndex_t olsrInsertToMprSet(olsrMprSet_t *MprSet,const olsrMprTuple_t *item);
 
 /*ms*/
 setIndex_t olsrInsertToMprSelectorSet(olsrMprSelectorSet_t *mprSelectorSet,\
-                                      olsrMprSelectorTuple_t *item);
+                                      const olsrMprSelectorTuple_t *item);
 
 setIndex_t olsrFindInMprSelectorSet(olsrMprSelectorSet_t *mprSelectorSet, olsrAddr_t addr);
 

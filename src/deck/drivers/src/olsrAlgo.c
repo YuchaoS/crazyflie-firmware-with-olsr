@@ -112,7 +112,7 @@ static void incrementAnsn()
   g_ansn++;
   xSemaphoreGive(olsrAnsnLock);
 }
-static void getAnsn()
+static uint16_t getAnsn()
 {
   xSemaphoreTake(olsrAnsnLock,portMAX_DELAY); 
   uint16_t retVal = g_ansn;
@@ -135,6 +135,12 @@ static void addMprSelectorTuple(const olsrMprSelectorTuple_t * tuple)
   olsrInsertToMprSelectorSet(&olsrMprSelectorSet,tuple);
   incrementAnsn();
 }
+
+static void addTopologyTuple(const olsrTopologyTuple_t *tuple)
+{
+  olsrInsertToTopologySet(&olsrTopologySet,tuple);
+}
+
 static void linkTupleAdded(olsrLinkTuple_t *tuple,uint8_t willingness)
 {
   // Creates associated neighbor tuple
@@ -222,7 +228,7 @@ static void linkSensing(const olsrMessage_t* helloMsg)
     {
       updated = true;
     }
-  olsrLinkSet.setData[linkTuple].data.m_asymTime = now +helloMsg->m_messageHeader.m_vTime*1000;
+  olsrLinkSet.setData[linkTuple].data.m_asymTime = now +helloMsg->m_messageHeader.m_vTime;
   olsrHelloMessage_t* helloMsgBody = (olsrHelloMessage_t*)(helloMsg->m_messagePayload);
   for(uint8_t i = 0;i < helloMsgBody->m_helloHeader.m_linkMessageNumber;i++)
     {
@@ -244,7 +250,7 @@ static void linkSensing(const olsrMessage_t* helloMsg)
             }
           else if(lt == OLSR_SYM_LINK ||lt == OLSR_ASYM_LINK)
             {
-              olsrLinkSet.setData[linkTuple].data.m_symTime = now +helloMsg->m_messageHeader.m_vTime*1000;
+              olsrLinkSet.setData[linkTuple].data.m_symTime = now +helloMsg->m_messageHeader.m_vTime;
               olsrLinkSet.setData[linkTuple].data.m_expirationTime = olsrLinkSet.setData[linkTuple].data.m_symTime+OLSR_NEIGHB_HOLD_TIME*1000;
               updated = true;
             }
@@ -312,14 +318,14 @@ void populateTwoHopNeighborSet(const olsrMessage_t* helloMsg)
               if(twoHopNeighborTuple != -1)
                 {
                   olsrTwoHopNeighborSet.setData[twoHopNeighborTuple].data.m_expirationTime = now+\
-                                                    helloMsg->m_messageHeader.m_vTime*1000;
+                                                    helloMsg->m_messageHeader.m_vTime;
                 }
               else
                 {
                   olsrTwoHopNeighborTuple_t newTuple;
                   newTuple.m_neighborAddr = sender;
                   newTuple.m_twoHopNeighborAddr = candidate;
-                  newTuple.m_expirationTime = now+helloMsg->m_messageHeader.m_vTime*1000;
+                  newTuple.m_expirationTime = now+helloMsg->m_messageHeader.m_vTime;
                   addTwoHopNeighborTuple(&newTuple);
                 }
               
@@ -359,7 +365,7 @@ void populateMprSelectorSet(const olsrMessage_t* helloMsg)
               olsrMprSelectorTuple_t new;
               new.m_addr = sender;
               new.m_expirationTime = now + helloMsg->m_messageHeader.m_vTime;
-              addMprSelectorTuple(&olsrMprSelectorSet,&new);
+              addMprSelectorTuple(&new);
             }
           else
             {
@@ -575,6 +581,8 @@ void olsrProcessTc(const olsrMessage_t* tcMsg)
   olsrTime_t now = xTaskGetTickCount();
   olsrAddr_t originator = tcMsg->m_messageHeader.m_originatorAddress;
   olsrAddr_t sender = tcMsg->m_messageHeader.m_relayAddress;
+  olsrTopologyMessage_t* tcBody = (olsrTopologyMessage_t *)tcMsg->m_messagePayload;
+  uint16_t ansn = tcBody->m_ansn;
 
   setIndex_t linkTupleIndex = olsrFindSymLinkTuple(&olsrLinkSet,sender,now);
   if(linkTupleIndex == -1)
@@ -582,7 +590,33 @@ void olsrProcessTc(const olsrMessage_t* tcMsg)
       DEBUG_PRINT_OLSR_TC("not from sym link.\n");
       return;
     }
-  
+  setIndex_t topologyTupleIndex = olsrFindNewerTopologyTuple(&olsrTopologySet,originator,ansn);
+  if(topologyTupleIndex != -1)
+    {
+      return;
+    }
+  olsrEraseOlderTopologyTuples(&olsrTopologySet,originator,ansn);
+  uint8_t count = (tcMsg->m_messageHeader.m_messageSize - sizeof(olsrMessageHeader_t) - 2)/ \
+                  sizeof(olsrTopologyMessageUint_t);
+  for(int i = 0;i < count ;i++)
+    {
+      olsrAddr_t destAddr =  tcBody->m_content[i].m_address;
+      setIndex_t topologyIt = olsrFindTopologyTuple(&olsrTopologySet,destAddr,originator);
+      if(topologyIt != -1)
+        {
+          olsrTopologySet.setData[topologyIt].data.m_expirationTime = now + tcMsg->m_messageHeader.m_vTime;
+        }
+      else
+        {
+          olsrTopologyTuple_t topologyTuple;
+          topologyTuple.m_destAddr = destAddr;
+          topologyTuple.m_lastAddr = originator;
+          topologyTuple.m_seqenceNumber = ansn;
+          topologyTuple.m_expirationTime = now + tcMsg->m_messageHeader.m_vTime;
+          topologyTuple.m_distance = tcBody->m_content[i].m_distance;
+          addTopologyTuple(&topologyTuple);
+        }
+    }
 }
 
 //switch to tc|hello|ts process
@@ -608,13 +642,11 @@ void olsrPacketDispatch(const packet_t* rxPacket)
         {
         case HELLO_MESSAGE:
             DEBUG_PRINT_OLSR_RECEIVE("HELLO_MESSAGE\n");
-            // olsr_process_hello_message(olsr_message);
             olsrProcessHello(olsrMessage);
             break;
         case TC_MESSAGE:
             DEBUG_PRINT_OLSR_RECEIVE("TC_MESSAGE\n");
             olsrProcessTc(olsrMessage);
-            // olsr_tc_process(olsr_message);
             // olsr_tc_forward(olsr_message);
             break;
         case DATA_MESSAGE:
@@ -758,7 +790,7 @@ void olsrSendTc()
       tcMsg.m_content[pos++].m_distance = 1;
       mprSelectorIt = tmp.next;
     }
-  memcpy(&msg.m_messagePayload,&tcMsg,2+pos*sizeof(olsrTopologyMessageUint_t);
+  memcpy(&msg.m_messagePayload,&tcMsg,2+pos*sizeof(olsrTopologyMessageUint_t));
   msg.m_messageHeader.m_messageSize+=(2+pos*sizeof(olsrTopologyMessageUint_t));
   xQueueSend(g_olsrSendQueue,&msg,portMAX_DELAY);
 }
@@ -785,22 +817,13 @@ void olsrTcTask(void *ptr){
         {
           DEBUG_PRINT_OLSR_TC("Not sending any TC, no one selected me as MPR.\n");
         }     
-      vTaskDelay(M2T(OLSR_TC_INTERVAL))
+      vTaskDelay(M2T(OLSR_TC_INTERVAL));
     }
 }
 void olsr_send_ts_to_queue(){
     DEBUG_PRINT_OLSR_SEND("TS_SEND TO QUEUE\n");
 }
 
-void olsr_tc_task(void *ptr){
-    while(true)
-    {    
-        if(true){//USE 
-            olsr_send_tc_to_queue();
-        }  
-        vTaskDelay(M2T(TC_INTERVAL)); 
-    }
-}
 void olsr_ts_task(void *ptr){
     while(true)
     {    
