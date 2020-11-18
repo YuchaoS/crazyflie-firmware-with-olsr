@@ -5,20 +5,14 @@
 
 #include "mac.h"
 #include "olsrDebug.h"
+#include "olsrPacket.h"
+
+
 
 /*
 ************************QueueInitFunctions********************
 */
-static void olsrSendQueueInit()
-{
-  g_olsrSendQueue = xQueueCreate(10,sizeof(packet_t));
-  DEBUG_PRINT_OLSR_SYSTEM("SEND_QUEUE_INIT_SUCCESSFUL\n");
-}
-static void olsrRecvQueueInit()
-{
-  g_olsrRecvQueue = xQueueCreate(10,sizeof(packet_t));
-  DEBUG_PRINT_OLSR_SYSTEM("RECV_QUEUE_INIT_SUCCESSFUL\n");
-}
+
 
 /*
 ************************TopologySetFunctions********************
@@ -103,17 +97,10 @@ setIndex_t olsrInsertToTopologySet(olsrTopologySet_t *topologySet,\
   return candidate;
 }
 
-void olsrPrintTopologySet(olsrTopologySet_t *topologySet)
+
+void olsrDelTopologyTupleByPos(setIndex_t pos)
 {
-  setIndex_t pre = topologySet->fullQueueEntry;
-  while(pre!=-1)
-    {
-      DEBUG_PRINT_OLSR_SET("%d : destAddr:%u lastAddr:%u distance:%d\n",pre,\
-                            topologySet->setData[pre].data.m_destAddr,\
-                            topologySet->setData[pre].data.m_lastAddr,\
-                            topologySet->setData[pre].data.m_distance);
-      pre =  topologySet->setData[pre].next;
-    }
+  olsrTopologySetFree(&olsrTopologySet ,pos);
 }
 
 setIndex_t olsrFindNewerTopologyTuple(olsrTopologySet_t *topologyset,\
@@ -167,6 +154,17 @@ setIndex_t olsrFindTopologyTuple(olsrTopologySet_t *topologyset,\
       candidate = item.next;
     }
   return candidate;
+}
+
+void olsrPrintTopologySet(olsrTopologySet_t *topologyset)
+{
+  setIndex_t candidate = topologyset->fullQueueEntry;
+  while(candidate != -1)
+    {
+      olsrTopologySetItem_t tmp = topologyset->setData[candidate];
+      DEBUG_PRINT_OLSR_TOPOLOGY("TOPOLOGYSET: last:%d,dest:%d\n",tmp.data.m_lastAddr,tmp.data.m_destAddr);
+      candidate = tmp.next;
+    }
 }
 /*
 ************************LinkSetFunctions********************
@@ -245,7 +243,10 @@ static bool olsrLinkSetFree(olsrLinkSet_t *linkSet,setIndex_t delItem)
     }
     return false;
 }
-
+void olsrDelLinkTupleByPos(setIndex_t pos)
+{
+  olsrLinkSetFree(&olsrLinkSet ,pos);
+}
 setIndex_t olsrFindInLinkByAddr(olsrLinkSet_t *linkSet,const olsrAddr_t addr)
 {
   setIndex_t it = linkSet->fullQueueEntry;
@@ -279,7 +280,7 @@ void olsrPrintLinkSet(olsrLinkSet_t *linkSet)
   while(it != -1)
     {
       olsrLinkSetItem_t tmp = linkSet->setData[it];
-      DEBUG_PRINT_OLSR_LINK("linkSet: localAddr is %d, neighborAddr is %d\n",tmp.data.m_localAddr,tmp.data.m_neighborAddr);
+      DEBUG_PRINT_OLSR_LINK("linkSet: localAddr is %d, neighborAddr is %d ,\n",tmp.data.m_localAddr,tmp.data.m_neighborAddr);
       it = tmp.next;
     }
 }
@@ -297,6 +298,8 @@ setIndex_t olsrFindSymLinkTuple(olsrLinkSet_t *linkSet,olsrAddr_t sender,olsrTim
     }
   return candidate;
 }
+
+
 /*
 ************************NeighborSetFunctions********************
 */
@@ -375,6 +378,17 @@ static bool olsrNeighborSetFree(olsrNeighborSet_t *neighborSet, \
         }
     }
     return false;
+}
+
+bool olsrDelNeighborByAddr(olsrAddr_t addr)
+{
+  setIndex_t candidate = olsrFindNeighborByAddr(&olsrNeighborSet,addr);
+  if(candidate != -1)
+    {
+      olsrNeighborSetFree(&olsrNeighborSet,candidate);
+      return true;
+    }
+  return false;
 }
 
 setIndex_t olsrFindNeighborByAddr(olsrNeighborSet_t *neighborSet,\
@@ -507,9 +521,11 @@ setIndex_t olsrFindTwoHopNeighborTuple(olsrTwoHopNeighborSet_t *twoHopNeighborSe
         {
           break;
         }
+      candidate = twoHopNeighborSet->setData[candidate].next;
     }
   return candidate;
 }
+
 
 setIndex_t olsrInsertToTwoHopNeighborSet(olsrTwoHopNeighborSet_t *twoHopNeighborSet,\
                                          const olsrTwoHopNeighborTuple_t* tuple)
@@ -542,6 +558,29 @@ setIndex_t olsrEraseTwoHopNeighborTuple(olsrTwoHopNeighborSet_t *twoHopNeighborS
   return candidate;
 }
 
+void olsrDelTwoHopNeighborTupleByPos(setIndex_t pos)
+{
+  olsrTwoHopNeighborSetFree(&olsrTwoHopNeighborSet ,pos);
+}
+
+void olsrEraseTwoHopNeighborTupleByNeighborAddr(olsrTwoHopNeighborSet_t *twoHopNeighborSet,\
+                                  olsrAddr_t neighborAddr)
+{
+  setIndex_t candidate = twoHopNeighborSet->fullQueueEntry;
+  while(candidate != -1)
+    {
+      olsrTwoHopNeighborSetItem_t tmp = twoHopNeighborSet->setData[candidate];
+      if(tmp.data.m_neighborAddr == neighborAddr)
+        {
+          setIndex_t delItem = candidate;
+          candidate = tmp.next;
+          olsrTwoHopNeighborSetFree(&olsrTwoHopNeighborSet,delItem);
+          continue;
+        }
+      candidate = tmp.next;
+    }
+}
+
 setIndex_t olsrEraseTwoHopNeighborTupleByTuple(olsrTwoHopNeighborSet_t *twoHopNeighborSet,\
                                         olsrTwoHopNeighborTuple_t *tuple)
 {
@@ -555,6 +594,17 @@ setIndex_t olsrEraseTwoHopNeighborTupleByTuple(olsrTwoHopNeighborSet_t *twoHopNe
         }
     }
   return candidate; 
+}
+
+void olsrPrintTwoHopNeighborSet(olsrTwoHopNeighborSet_t *twoHopNeighborSet)
+{
+  setIndex_t candidate = twoHopNeighborSet->fullQueueEntry;
+  while (candidate != -1)
+  {
+    olsrTwoHopNeighborSetItem_t tmp = twoHopNeighborSet->setData[candidate];
+    DEBUG_PRINT_OLSR_NEIGHBOR2("2HopNeighborSet: neighbor:%d ,2hopNeighbor: %d\n",tmp.data.m_neighborAddr,tmp.data.m_twoHopNeighborAddr);
+    candidate = tmp.next;
+  }
 }
 /*
 ************************MprSetFunctions********************
@@ -591,36 +641,7 @@ static setIndex_t olsrMprSetMalloc(olsrMprSet_t *mprSet)
     }
 }
 
-static bool olsrMprSetFree(olsrMprSet_t *mprSet, setIndex_t delItem)
-{
-  if(-1==delItem) return true;
-  //del from full queue
-  setIndex_t pre = mprSet->fullQueueEntry;
-  if(delItem == pre)
-    {
-      mprSet->fullQueueEntry = mprSet->setData[pre].next;
-      //insert to empty queue
-      mprSet->setData[delItem].next = mprSet->freeQueueEntry;
-      mprSet->freeQueueEntry = delItem;
-      return true;
-    }
-  else 
-    {
-      while(pre!=-1)
-        {
-          if(mprSet->setData[pre].next==delItem)
-            {
-              mprSet->setData[pre].next = mprSet->setData[delItem].next;
-              //insert to empty queue
-              mprSet->setData[delItem].next = mprSet->freeQueueEntry;
-              mprSet->freeQueueEntry = delItem;
-              return true;
-            }
-          pre = mprSet->setData[pre].next;
-        }
-    }
-    return false;
-}
+
 setIndex_t olsrInsertToMprSet(olsrMprSet_t *MprSet,const olsrMprTuple_t *item)
 {
   setIndex_t candidate = olsrMprSetMalloc(MprSet);
@@ -652,6 +673,16 @@ bool olsrFindMprByAddr(olsrMprSet_t *mprSet,\
   return isFound;
 }
 
+void olsrPrintMprSet(olsrMprSet_t *mprSet)
+{
+  setIndex_t candidate = mprSet->fullQueueEntry;
+  while(candidate != -1)
+    {
+      olsrMprSetItem_t tmp = mprSet->setData[candidate];
+      DEBUG_PRINT_OLSR_MPR("MPRSET: %d\n",tmp.data.m_addr);
+      candidate = tmp.next;
+    }
+}
 /*
 ***********************MprSelectorSetFunctions********************
 */
@@ -749,6 +780,39 @@ bool olsrMprSelectorSetIsEmpty()
 {
   return (olsrMprSelectorSet.fullQueueEntry != -1);
 }
+
+bool olsrEraseMprSelectorTuples(olsrMprSelectorSet_t *mprSelectorSet, olsrAddr_t addr)
+{
+  setIndex_t candidate = mprSelectorSet->fullQueueEntry;
+  while(candidate != -1)
+    {
+      olsrMprSelectorSetItem_t tmp = mprSelectorSet->setData[candidate];
+      if(tmp.data.m_addr == addr)
+        {
+          if(olsrMprSelectorSetFree(&olsrMprSelectorSet,candidate))
+            {
+              return true;
+            }
+        }
+    }
+  return false;
+}
+
+void olsrDelMprSelectorTupleByPos(setIndex_t pos)
+{
+  olsrMprSelectorSetFree(&olsrMprSelectorSet, pos);
+}
+
+void olsrPrintMprSelectorSet(olsrMprSelectorSet_t *mprSelectorSet)
+{
+  setIndex_t candidate = mprSelectorSet->fullQueueEntry;
+  while(candidate != -1)
+    {
+      olsrMprSelectorSetItem_t tmp = mprSelectorSet->setData[candidate];
+      DEBUG_PRINT_OLSR_MS("MPR_SEL_SET: add :%d\n",tmp.data.m_addr);
+      candidate = tmp.next;
+    }
+}
 /*
 ************************DuplicateSetFunctions********************
 */
@@ -816,7 +880,66 @@ static bool olsrDuplicateSetFree(olsrDuplicateSet_t *duplicateSet, setIndex_t de
     return false;
 }
 
+setIndex_t olsrFindInDuplicateSet(olsrDuplicateSet_t *duplicateSet,olsrAddr_t originator,uint16_t seq)
+{
+  setIndex_t duplicateIt = duplicateSet->fullQueueEntry;
+  while(duplicateIt != -1)
+    {
+      olsrDuplicateSetItem_t item = duplicateSet->setData[duplicateIt];
+      if(item.data.m_addr == originator && item.data.m_seqenceNumber == seq)
+        {
+          break;
+        }
+      duplicateIt = item.next;
+    }
+  return duplicateIt;
+}
 
+setIndex_t olsrInsertDuplicateTuple(olsrDuplicateSet_t *duplicateSet,const olsrDuplicateTuple_t *tuple)
+{
+  setIndex_t duplicateIt = olsrDuplicateSetMalloc(duplicateSet);
+  if(duplicateIt != -1)
+    {
+      memcpy(&duplicateSet->setData[duplicateIt].data,tuple,sizeof(olsrDuplicateTuple_t));
+    }
+  else
+    {
+      DEBUG_PRINT_OLSR_DUPLICATE("bad alloc in olsrInsertDuplicateTuple");
+    }
+  return duplicateIt;
+}
+
+bool olsrDuplicateSetClearExpire()
+{
+  setIndex_t candidate = olsrDuplicateSet.fullQueueEntry;
+  olsrTime_t now = xTaskGetTickCount();
+  bool isChange = false;
+  while(candidate != -1)
+    {
+      olsrDuplicateSetItem_t tmp = olsrDuplicateSet.setData[candidate];
+      if(tmp.data.m_expirationTime < now)
+        {
+          setIndex_t nextIt = tmp.next;
+          olsrDuplicateSetFree(&olsrDuplicateSet,candidate);
+          candidate = nextIt;
+          isChange = true;
+          continue;
+        }
+      candidate = tmp.next;
+    }
+  return isChange;
+}
+
+void olsrPrintDuplicateSet(olsrDuplicateSet_t *duplicateSet)
+{
+  setIndex_t candidate = duplicateSet->fullQueueEntry;
+  while(candidate != -1)
+    {
+      olsrDuplicateSetItem_t tmp = duplicateSet->setData[candidate];
+      DEBUG_PRINT_OLSR_DUPLICATE("DUPSET:addr:%d,seq:%d",tmp.data.m_addr,tmp.data.m_seqenceNumber);
+      candidate = tmp.next;
+    }
+}
 /*
 ************************CommonFunctions********************
 */
@@ -834,23 +957,19 @@ static bool olsrDuplicateSetFree(olsrDuplicateSet_t *duplicateSet, setIndex_t de
 
 static void olsrSetEntryInit()
 {
-  olsrTopologyEmptySetLock = xSemaphoreCreateMutex();
-  olsrTopologyFullSetLock = xSemaphoreCreateMutex();
-  olsrLinkEmptySetLock = xSemaphoreCreateMutex();
-  olsrLinkFullSetLock = xSemaphoreCreateMutex();
-  olsrNeighborEmptySetLock = xSemaphoreCreateMutex();
-  olsrNeighborFullSetLock = xSemaphoreCreateMutex();
-  olsrMprEmptySetLock = xSemaphoreCreateMutex();
-  olsrMprFullSetLock = xSemaphoreCreateMutex();
-  olsrTwoHopNeighborEmptySetLock = xSemaphoreCreateMutex();
-  olsrTwoHopNeighborFullSetLock = xSemaphoreCreateMutex();
+  olsrTopologySetLock = xSemaphoreCreateMutex();
+  olsrLinkSetLock = xSemaphoreCreateMutex();
+  olsrNeighborSetLock = xSemaphoreCreateMutex();
+  olsrMprSetLock = xSemaphoreCreateMutex();
+  olsrTwoHopNeighborSetLock = xSemaphoreCreateMutex();
+  olsrMprSelectorSetLock = xSemaphoreCreateMutex();
+  olsrDuplicateSetLock = xSemaphoreCreateMutex();
 }
 
 
 void olsrStructInitAll(dwDevice_t *dev)
 {
-  olsrSendQueueInit();
-  olsrRecvQueueInit();
+  DEBUG_PRINT_OLSR_SYSTEM("start init struct\n");
   olsrSetEntryInit();
   olsrTopologySetInit(&olsrTopologySet);
   olsrLinkSetInit(&olsrLinkSet);
@@ -858,4 +977,5 @@ void olsrStructInitAll(dwDevice_t *dev)
   olsrTwoHopNeighborSetInit(&olsrTwoHopNeighborSet);
   olsrMprSetInit(&olsrMprSet);
   olsrDuplicateSetInit(&olsrDuplicateSet);
+  olsrMprSelectorSetInit(&olsrMprSelectorSet);
 }
