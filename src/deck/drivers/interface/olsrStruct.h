@@ -40,6 +40,7 @@ typedef short setIndex_t;
 #define MPR_SELECTOR_SET_SIZE 30
 #define NEIGHBOR_SET_SIZE 30
 #define TWO_HOP_NEIGHBOR_SET_SIZE 30
+#define ROUTING_SET_SIZE 30
 
 SemaphoreHandle_t olsrNeighborSetLock;
 typedef enum
@@ -204,10 +205,22 @@ typedef struct
   olsrTime_t m_expirationTime;
 } olsrRoutingTuple_t;
 
+typedef struct 
+{
+  olsrRoutingTuple_t data;
+  setIndex_t next;
+} olsrRoutingSetItem_t;
+
 /*
 ********************Set Definition*******************
 */
 
+typedef struct
+{
+  olsrRoutingSetItem_t setData[ROUTING_SET_SIZE];
+  setIndex_t freeQueueEntry;
+  setIndex_t fullQueueEntry;
+} olsrRoutingSet_t;
 
 
 typedef struct 
@@ -288,6 +301,8 @@ olsrDuplicateSet_t olsrDuplicateSet;
 olsrMprSet_t olsrMprSet;
 
 olsrMprSelectorSet_t olsrMprSelectorSet;
+
+olsrRoutingSet_t olsrRoutingSet;
 
 /*linkSet*/
 setIndex_t olsrInsertToLinkSet(olsrLinkSet_t *linkSet, const olsrLinkTuple_t *item);
@@ -391,4 +406,9 @@ setIndex_t olsrInsertDuplicateTuple(olsrDuplicateSet_t *duplicateSet, const olsr
 bool olsrDuplicateSetClearExpire();
 
 void olsrPrintDuplicateSet(olsrDuplicateSet_t *duplicateSet);
+
+/*routing table*/
+void olsrRoutingSetInit(olsrRoutingSet_t *routingSet);
+
+bool olsrRoutingSetInsert(olsrRoutingSet_t *routingSet,olsrRoutingTuple_t *tuple);
 #endif //__OLSR_STRUCT_H__

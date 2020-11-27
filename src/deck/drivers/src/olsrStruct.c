@@ -277,6 +277,10 @@ setIndex_t olsrInsertToLinkSet(olsrLinkSet_t *linkSet,const olsrLinkTuple_t *ite
 void olsrPrintLinkSet(olsrLinkSet_t *linkSet)
 {
   setIndex_t it = linkSet->fullQueueEntry;
+  if(it == -1)
+    {
+      DEBUG_PRINT_OLSR_LINK("linkSet is empty!\n");
+    }
   while(it != -1)
     {
       olsrLinkSetItem_t tmp = linkSet->setData[it];
@@ -423,6 +427,10 @@ setIndex_t olsrInsertToNeighborSet(olsrNeighborSet_t *neighborSet, const olsrNei
 void olsrPrintNeighborSet(olsrNeighborSet_t *neighborSet)
 {
   setIndex_t it = neighborSet->fullQueueEntry;
+  if(it == -1)
+    {
+      DEBUG_PRINT_OLSR_NEIGHBOR("neighborSet is empty\n");
+    }
   while(it != -1)
     {
       olsrNeighborSetItem_t tmp = neighborSet->setData[it];
@@ -599,6 +607,10 @@ setIndex_t olsrEraseTwoHopNeighborTupleByTuple(olsrTwoHopNeighborSet_t *twoHopNe
 void olsrPrintTwoHopNeighborSet(olsrTwoHopNeighborSet_t *twoHopNeighborSet)
 {
   setIndex_t candidate = twoHopNeighborSet->fullQueueEntry;
+  if(candidate == -1)
+    {
+       DEBUG_PRINT_OLSR_NEIGHBOR2("2HopNeighborSet is empty!\n");
+    }
   while (candidate != -1)
   {
     olsrTwoHopNeighborSetItem_t tmp = twoHopNeighborSet->setData[candidate];
@@ -778,7 +790,7 @@ setIndex_t olsrFindInMprSelectorSet(olsrMprSelectorSet_t *mprSelectorSet, olsrAd
 
 bool olsrMprSelectorSetIsEmpty()
 {
-  return (olsrMprSelectorSet.fullQueueEntry != -1);
+  return (olsrMprSelectorSet.fullQueueEntry == -1);
 }
 
 bool olsrEraseMprSelectorTuples(olsrMprSelectorSet_t *mprSelectorSet, olsrAddr_t addr)
@@ -840,7 +852,7 @@ static setIndex_t olsrDuplicateSetMalloc(olsrDuplicateSet_t *duplicateSet)
   else
     { 
       setIndex_t candidate = duplicateSet->freeQueueEntry;
-      duplicateSet->freeQueueEntry = olsrDuplicateSet.setData[candidate].next;
+      duplicateSet->freeQueueEntry = duplicateSet->setData[candidate].next;
       //insert to full queue
       setIndex_t tmp = duplicateSet->fullQueueEntry;
       duplicateSet->fullQueueEntry = candidate;
@@ -940,6 +952,87 @@ void olsrPrintDuplicateSet(olsrDuplicateSet_t *duplicateSet)
       candidate = tmp.next;
     }
 }
+
+
+/*
+************************RoutingSetFunction********************
+*/
+
+void olsrRoutingSetInit(olsrRoutingSet_t *routingSet)
+{
+  int i;
+  for(i=0; i < DUPLICATE_SET_SIZE-1; i++)
+    {
+      routingSet->setData[i].next = i+1;
+    }
+  routingSet->setData[i].next = -1;
+  routingSet->freeQueueEntry = 0;
+  routingSet->fullQueueEntry = -1;
+}
+
+static setIndex_t olsrRoutingSetMalloc(olsrRoutingSet_t *routingSet)
+{
+  if(routingSet->freeQueueEntry==-1)
+    {
+      DEBUG_PRINT_OLSR_SET("Full of sets!!!! can not malloc!!!\n");
+      return -1;
+    }
+  else
+    { 
+      setIndex_t candidate = routingSet->freeQueueEntry;
+      routingSet->freeQueueEntry = routingSet->setData[candidate].next;
+      //insert to full queue
+      setIndex_t tmp = routingSet->fullQueueEntry;
+      routingSet->fullQueueEntry = candidate;
+      routingSet->setData[candidate].next = tmp;
+      return candidate;
+    }
+}
+
+static bool olsrRoutingSetFree(olsrRoutingSet_t *routingSet, setIndex_t delItem)
+{
+  if(-1==delItem) return true;
+  //del from full queue
+  setIndex_t pre = routingSet->fullQueueEntry;
+  if(delItem == pre)
+    {
+      routingSet->fullQueueEntry = routingSet->setData[pre].next;
+      //insert to empty queue
+      routingSet->setData[delItem].next = routingSet->freeQueueEntry;
+      routingSet->freeQueueEntry = delItem;
+      return true;
+    }
+  else 
+    {
+      while(pre!=-1)
+        {
+          if(routingSet->setData[pre].next==delItem)
+            {
+              routingSet->setData[pre].next = routingSet->setData[delItem].next;
+              //insert to empty queue
+              routingSet->setData[delItem].next = routingSet->freeQueueEntry;
+              routingSet->freeQueueEntry = delItem;
+              return true;
+            }
+          pre = routingSet->setData[pre].next;
+        }
+    }
+    return false;
+}
+bool olsrRoutingSetInsert(olsrRoutingSet_t *routingSet,olsrRoutingTuple_t *tuple)
+{
+  setIndex_t candidate = olsrRoutingSetMalloc(routingSet);
+  if(candidate != -1)
+    {
+      memcpy(&routingSet->setData[candidate].data,tuple,sizeof(olsrRoutingTuple_t));
+      return true;
+    }
+  else
+    {
+      return false;
+    }
+}
+
 /*
 ************************CommonFunctions********************
 */
@@ -978,4 +1071,5 @@ void olsrStructInitAll(dwDevice_t *dev)
   olsrMprSetInit(&olsrMprSet);
   olsrDuplicateSetInit(&olsrDuplicateSet);
   olsrMprSelectorSetInit(&olsrMprSelectorSet);
+  olsrRoutingSetInit(&olsrRoutingSet);
 }
