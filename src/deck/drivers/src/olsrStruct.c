@@ -1033,6 +1033,7 @@ bool olsrRoutingSetInsert(olsrRoutingSet_t *routingSet,olsrRoutingTuple_t *tuple
     }
 }
 
+
 /*
 ************************CommonFunctions********************
 */

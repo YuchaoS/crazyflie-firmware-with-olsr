@@ -20,7 +20,7 @@
 #define TS_INTERVAL 1000
 #define OLSR_ROUTING_SET_HOLD_TIME 10000
 #define OLSR_DUP_CLEAR_INTERVAL 30000
-#define OLSR_LINK_CLEAR_INTERVAL 6000
+#define OLSR_LINK_CLEAR_INTERVAL 5000
 #define OLSR_MPR_SELECTOR_CLEAR_INTERVAL 6000
 
 #define OLSR_NEIGHBOR2HOP_CLEAR_INTERVAL 5000
@@ -334,12 +334,10 @@ void populateTwoHopNeighborSet(const olsrMessage_t* helloMsg)
   if(linkTuple != -1)
     {
       olsrHelloMessage_t* helloMsgBody = (olsrHelloMessage_t*)helloMsg->m_messagePayload;
-      DEBUG_PRINT_OLSR_RECEIVE("number of link is %d in populate 2hop\n",helloMsgBody->m_helloHeader.m_linkMessageNumber);
       for(int i = 0;i<helloMsgBody->m_helloHeader.m_linkMessageNumber;i++)
         {
           uint8_t nbType = (helloMsgBody->m_linkMessage[i].m_linkCode >> 2) & 0x3;
           olsrAddr_t candidate = helloMsgBody->m_linkMessage[i].m_addresses;
-          DEBUG_PRINT_OLSR_RECEIVE("the link %d 's nbType is %d",candidate,nbType);
           if(nbType == OLSR_SYM_NEIGH || nbType == OLSR_MPR_NEIGH)
             {
               if(candidate == myAddress)
@@ -347,7 +345,6 @@ void populateTwoHopNeighborSet(const olsrMessage_t* helloMsg)
                   continue;
                 }
               setIndex_t twoHopNeighborTuple = olsrFindTwoHopNeighborTuple(&olsrTwoHopNeighborSet,sender,candidate);
-              DEBUG_PRINT_OLSR_RECEIVE("twoHopNeighborTuple is %d",twoHopNeighborTuple);
               if(twoHopNeighborTuple != -1)
                 {
                   olsrTwoHopNeighborSet.setData[twoHopNeighborTuple].data.m_expirationTime = now+\
@@ -360,7 +357,6 @@ void populateTwoHopNeighborSet(const olsrMessage_t* helloMsg)
                   newTuple.m_twoHopNeighborAddr = candidate;
                   newTuple.m_expirationTime = now+helloMsg->m_messageHeader.m_vTime;
                   addTwoHopNeighborTuple(&newTuple);
-                  DEBUG_PRINT_OLSR_RECEIVE("add to twohop\n");
                 }
             }
           else if(nbType == OLSR_NOT_NEIGH)
@@ -456,16 +452,8 @@ void mprCompute()
         {
           if(N.setData[itForN].data.m_neighborAddr == twoHopNTuple.data.m_neighborAddr)
             {
-              if(N.setData[itForN].data.m_willingness == WILL_NEVER)
-                {
-                  ok = false;
-                  break;
-                }
-              else
-                {
-                  ok = true;
-                  break;
-                }
+              N.setData[itForN].data.m_willingness == WILL_NEVER?ok=false:ok=true;
+              break;
             }
           itForN = N.setData[itForN].next;
         }
@@ -512,9 +500,9 @@ void mprCompute()
             }
           otherN2It = N2.setData[otherN2It].next;
         }
-      
       if(onlyOne&&!olsrFindMprByAddr(&olsrMprSet, N2.setData[n2It].data.m_neighborAddr))
         {
+          DEBUG_PRINT_OLSR_MPR("this addr:% is matched a isolatied node in two hop\n",N2.setData[n2It].data.m_neighborAddr);
           olsrMprTuple_t item;
           item.m_addr = N2.setData[n2It].data.m_neighborAddr;
           olsrInsertToMprSet(&olsrMprSet,&item);
@@ -555,48 +543,48 @@ void mprCompute()
         }
       itForEraseFromN2 = N2.setData[itForEraseFromN2].next;
     }
-    int count = 0;
-  while(N2.fullQueueEntry != -1 && count<10)
-      {
-        count++;
-        DEBUG_PRINT_OLSR_NEIGHBOR2("in mpr cmpute !!!\n");
-        olsrPrintTwoHopNeighborSet(&N2);
-        int maxR = 0;
-        setIndex_t maxNeighborTuple = -1;
-        uint8_t num[NEIGHBOR_SET_SIZE];
-        setIndex_t nbIt = N.fullQueueEntry;
-        while(nbIt != -1)
-          {
-            setIndex_t nbTwoHopIt = N2.fullQueueEntry;
-            uint8_t count = 0;
-            while(nbTwoHopIt != -1)
+  int count = 0;
+  while(N2.fullQueueEntry != -1)
+    {
+      count++;
+      DEBUG_PRINT_OLSR_NEIGHBOR2("in mpr cmpute !!!\n");
+      olsrPrintTwoHopNeighborSet(&N2);
+      int maxR = 0;
+      setIndex_t maxNeighborTuple = -1;
+      uint8_t num[NEIGHBOR_SET_SIZE];
+      setIndex_t nbIt = N.fullQueueEntry;
+      while(nbIt != -1)
+        {
+          setIndex_t nbTwoHopIt = N2.fullQueueEntry;
+          uint8_t count = 0;
+          while(nbTwoHopIt != -1)
+            {
+              if(N2.setData[nbTwoHopIt].data.m_neighborAddr 
+                == N.setData[nbIt].data.m_neighborAddr)
               {
-                if(N2.setData[nbTwoHopIt].data.m_neighborAddr 
-                  == N.setData[nbIt].data.m_neighborAddr)
-                {
-                  count++;
-                }
-                nbTwoHopIt = N2.setData[nbTwoHopIt].next;
+                count++;
               }
-            num[nbIt] = count;
-            nbIt = N.setData[nbIt].next;
-          }
-        for(int i = 0;i<NEIGHBOR_SET_SIZE;i++)
-          {
-            if(num[i]>maxR)
-              {
-                maxR = num[i];
-                maxNeighborTuple = i;
-              }
-          }
-        if(maxNeighborTuple != -1)
-          {
-            olsrMprTuple_t tmp;
-            tmp.m_addr = N.setData[maxNeighborTuple].data.m_neighborAddr;
-            olsrInsertToMprSet(&olsrMprSet,&tmp);
-            coverTwoHopNeighbors(tmp.m_addr,&N2);
-          }
-      }
+              nbTwoHopIt = N2.setData[nbTwoHopIt].next;
+            }
+          num[nbIt] = count;
+          nbIt = N.setData[nbIt].next;
+        }
+      for(int i = 0;i<NEIGHBOR_SET_SIZE;i++)
+        {
+          if(num[i]>maxR)
+            {
+              maxR = num[i];
+              maxNeighborTuple = i;
+            }
+        }
+      if(maxNeighborTuple != -1)
+        {
+          olsrMprTuple_t tmp;
+          tmp.m_addr = N.setData[maxNeighborTuple].data.m_neighborAddr;
+          olsrInsertToMprSet(&olsrMprSet,&tmp);
+          coverTwoHopNeighbors(tmp.m_addr,&N2);
+        }
+    }
 
 }
 void olsrPrintAll()
@@ -611,6 +599,9 @@ void olsrPrintAll()
 }
 void olsrProcessHello(const olsrMessage_t* helloMsg)
 {
+  /*
+  link->nb->nb2->mpr->mprs
+  */
   xSemaphoreTake(olsrLinkSetLock,portMAX_DELAY);
   xSemaphoreTake(olsrNeighborSetLock,portMAX_DELAY);
   xSemaphoreTake(olsrTwoHopNeighborSetLock,portMAX_DELAY);
@@ -861,11 +852,11 @@ void olsrPacketDispatch(const packet_t* rxPacket)
                 break;
             case TC_MESSAGE:
                 DEBUG_PRINT_OLSR_RECEIVE("recv a TC\n");
-                xSemaphoreTake(olsrLinkSetLock,portMAX_DELAY);
-                xSemaphoreTake(olsrTopologySetLock,portMAX_DELAY);
-                olsrProcessTc((olsrMessage_t*)message);
-                xSemaphoreGive(olsrTopologySetLock);
-                xSemaphoreGive(olsrLinkSetLock);
+                // xSemaphoreTake(olsrLinkSetLock,portMAX_DELAY);
+                // xSemaphoreTake(olsrTopologySetLock,portMAX_DELAY);
+                // olsrProcessTc((olsrMessage_t*)message);
+                // xSemaphoreGive(olsrTopologySetLock);
+                // xSemaphoreGive(olsrLinkSetLock);
                 // olsr_tc_forward(olsr_message);
                 break;
             case DATA_MESSAGE:
@@ -1037,10 +1028,13 @@ void olsrNeighborLoss(olsrAddr_t addr[],uint8_t length)
       olsrEraseMprSelectorTuples(&olsrMprSelectorSet,addr[i]);
     }
   mprCompute();
-
 }
-bool olsrLinkTupleClearExpire()
+bool olsrLinkTupleClearExpire() // 
 {
+   /*
+  link->nb->nb2->mpr->mprs
+  */
+  DEBUG_PRINT_OLSR_LINK("in clean link set\n");
   setIndex_t candidate = olsrLinkSet.fullQueueEntry;
   olsrTime_t now = xTaskGetTickCount();
   bool isChange = false;
@@ -1051,7 +1045,9 @@ bool olsrLinkTupleClearExpire()
       olsrLinkSetItem_t tmp = olsrLinkSet.setData[candidate];
       if(tmp.data.m_expirationTime < now)
         {
+          xSemaphoreTake(olsrNeighborSetLock,portMAX_DELAY);
           olsrDelNeighborByAddr(tmp.data.m_neighborAddr);
+          xSemaphoreGive(olsrNeighborSetLock);
           setIndex_t delItem = candidate;
           candidate = tmp.next;
           olsrDelLinkTupleByPos(delItem);
@@ -1073,8 +1069,17 @@ bool olsrLinkTupleClearExpire()
     }
   if(length > 0)
     {
+      xSemaphoreTake(olsrNeighborSetLock,portMAX_DELAY);
+      xSemaphoreTake(olsrTwoHopNeighborSetLock,portMAX_DELAY);
+      xSemaphoreTake(olsrMprSetLock,portMAX_DELAY);
+      xSemaphoreTake(olsrMprSelectorSetLock,portMAX_DELAY);
       olsrNeighborLoss(expireSymVec, length);
+      xSemaphoreGive(olsrMprSelectorSetLock);
+      xSemaphoreGive(olsrMprSetLock);
+      xSemaphoreGive(olsrTwoHopNeighborSetLock);
+      xSemaphoreGive(olsrNeighborSetLock);
     }
+  DEBUG_PRINT_OLSR_LINK("in clean link set finished\n");
   return isChange;
 }
 
@@ -1117,6 +1122,7 @@ bool olsrNbTwoHopTupleTimerExpire()
         }
       candidate = tmp.next;
     }
+  DEBUG_PRINT_OLSR_NEIGHBOR2("clear in expire\n");
   return isChange; 
 }
 
@@ -1181,10 +1187,12 @@ void olsrDupTupleTimerExpireTask(void *ptr)
 {
   while(true)
     {
+      xSemaphoreTake(olsrDuplicateSetLock,portMAX_DELAY);
       if(olsrDuplicateSetClearExpire())
         {
           DEBUG_PRINT_OLSR_DUPLICATE("has tuple be deleted\n");
         }
+      xSemaphoreGive(olsrDuplicateSetLock);
       vTaskDelay(M2T(OLSR_DUP_CLEAR_INTERVAL));
     }
 }
@@ -1205,10 +1213,12 @@ void olsrNbTwoHopTupleTimerExpireTask(void *ptr)
 {
   while(true)
     {
+      xSemaphoreTake(olsrTwoHopNeighborSetLock,portMAX_DELAY);
       if(olsrNbTwoHopTupleTimerExpire())
         {
           DEBUG_PRINT_OLSR_DUPLICATE("has tuple be deleted\n");
         }
+      xSemaphoreGive(olsrTwoHopNeighborSetLock);
       vTaskDelay(M2T(OLSR_NEIGHBOR2HOP_CLEAR_INTERVAL));
     }
 }
@@ -1216,10 +1226,12 @@ void olsrMprSelectorTupleTimerExpireTask(void *ptr)
 {
   while(true)
     {
+      xSemaphoreTake(olsrMprSelectorSetLock,portMAX_DELAY);
       if(olsrMprSelectorTupleTimerExpire())
         {
           DEBUG_PRINT_OLSR_DUPLICATE("has tuple be deleted\n");
         }
+      xSemaphoreGive(olsrMprSelectorSetLock);
       vTaskDelay(M2T(OLSR_MS_CLEAR_INTERVAL));
     }
 }
@@ -1227,10 +1239,12 @@ void olsrTopologyTupleTimerExpireTask(void *ptr)
 {
   while(true)
     {
+      xSemaphoreTake(olsrTopologySetLock,portMAX_DELAY);
       if(olsrTopologyTupleTimerExpire())
         {
           DEBUG_PRINT_OLSR_DUPLICATE("has tuple be deleted\n");
         }
+      xSemaphoreGive(olsrTopologySetLock);
       vTaskDelay(M2T(OLSR_TOP_CLEAR_INTERVAL));
     }
 }
