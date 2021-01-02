@@ -245,7 +245,7 @@ static void linkSensing(const olsrMessage_t* helloMsg)
   bool created = false, updated = false;
   if(linkTuple == -1)
     {
-      DEBUG_PRINT_OLSR_LINK("not found Addr %d in linkSet",helloMsg->m_messageHeader.m_originatorAddress);
+      DEBUG_PRINT_OLSR_LINK("not found Addr %d in linkSet\n", helloMsg->m_messageHeader.m_originatorAddress);
       olsrLinkTuple_t newLinkTuple;
       newLinkTuple.m_localAddr = myAddress;
       newLinkTuple.m_neighborAddr = helloMsg->m_messageHeader.m_originatorAddress;
@@ -280,6 +280,7 @@ static void linkSensing(const olsrMessage_t* helloMsg)
         {
           if(lt == OLSR_LOST_LINK)
             {
+              DEBUG_PRINT_OLSR_LINK("this addr %d is lost link\n",helloMsgBody->m_linkMessage[i].m_addresses);
               olsrLinkSet.setData[linkTuple].data.m_symTime = now - M2T(1000);
               updated = true;
             }
@@ -452,7 +453,8 @@ void mprCompute()
         {
           if(N.setData[itForN].data.m_neighborAddr == twoHopNTuple.data.m_neighborAddr)
             {
-              N.setData[itForN].data.m_willingness == WILL_NEVER?ok=false:ok=true;
+              // N.setData[itForN].data.m_willingness == WILL_NEVER? ok=false: ok=true;
+              ok = true;
               break;
             }
           itForN = N.setData[itForN].next;
@@ -460,6 +462,7 @@ void mprCompute()
       if(!ok)
         {
           itForTwoHopNeighBorSet = twoHopNTuple.next;
+          DEBUG_PRINT_OLSR_MPR("464 continue\n");
           continue;
         }
       //this two hop neighbor can not be one hop neighbor
@@ -483,6 +486,10 @@ void mprCompute()
     }
 
   olsrAddr_t coveredTwoHopNeighbors[TWO_HOP_NEIGHBOR_SET_T];
+  for(int i =0;i<TWO_HOP_NEIGHBOR_SET_T;i++)
+    {
+      coveredTwoHopNeighbors[i] = 0;
+    }
   uint8_t lenthOfCoveredTwoHopNeighbor = 0;
     //find the unique pair of two hop neighborN2
   setIndex_t n2It = N2.fullQueueEntry;
@@ -544,7 +551,7 @@ void mprCompute()
       itForEraseFromN2 = N2.setData[itForEraseFromN2].next;
     }
   int count = 0;
-  while(N2.fullQueueEntry != -1)
+  while(N2.fullQueueEntry != -1&&count<10)
     {
       count++;
       DEBUG_PRINT_OLSR_NEIGHBOR2("in mpr cmpute !!!\n");
@@ -552,6 +559,10 @@ void mprCompute()
       int maxR = 0;
       setIndex_t maxNeighborTuple = -1;
       uint8_t num[NEIGHBOR_SET_SIZE];
+      for(int i=0;i<NEIGHBOR_SET_SIZE;i++)
+        {
+          num[i] = 0;
+        }
       setIndex_t nbIt = N.fullQueueEntry;
       while(nbIt != -1)
         {
@@ -610,7 +621,7 @@ void olsrProcessHello(const olsrMessage_t* helloMsg)
   linkSensing(helloMsg);
   populateNeighborSet(helloMsg);
   populateTwoHopNeighborSet(helloMsg);  
-  mprCompute();
+  // mprCompute();
   populateMprSelectorSet(helloMsg);
   olsrPrintAll();
   xSemaphoreGive(olsrMprSelectorSetLock);
@@ -1027,7 +1038,7 @@ void olsrNeighborLoss(olsrAddr_t addr[],uint8_t length)
       olsrEraseTwoHopNeighborTupleByNeighborAddr(&olsrTwoHopNeighborSet,addr[i]);
       olsrEraseMprSelectorTuples(&olsrMprSelectorSet,addr[i]);
     }
-  mprCompute();
+  // mprCompute();
 }
 bool olsrLinkTupleClearExpire() // 
 {
@@ -1039,6 +1050,10 @@ bool olsrLinkTupleClearExpire() //
   olsrTime_t now = xTaskGetTickCount();
   bool isChange = false;
   olsrAddr_t expireSymVec[LINK_SET_SIZE];
+  for(int i=0;i<LINK_SET_SIZE;i++)
+    {
+      expireSymVec[i]=0;
+    }
   uint8_t length = 0;
   while(candidate != -1)
     {
@@ -1112,6 +1127,7 @@ bool olsrNbTwoHopTupleTimerExpire()
   while(candidate != -1)
     {
       olsrTwoHopNeighborSetItem_t tmp = olsrTwoHopNeighborSet.setData[candidate];
+      DEBUG_PRINT_OLSR_NEIGHBOR2("ex:%d,now:%d\n",tmp.data.m_expirationTime,now);
       if(tmp.data.m_expirationTime < now)
         {
           setIndex_t delItem = candidate;
@@ -1123,6 +1139,9 @@ bool olsrNbTwoHopTupleTimerExpire()
       candidate = tmp.next;
     }
   DEBUG_PRINT_OLSR_NEIGHBOR2("clear in expire\n");
+  if(isChange){
+    DEBUG_PRINT_OLSR_NEIGHBOR2("cleared morethan one tuple\n");
+  }
   return isChange; 
 }
 
