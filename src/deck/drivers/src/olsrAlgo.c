@@ -82,6 +82,10 @@ void olsrDeviceInit(dwDevice_t *dev){
   olsrRecvQueueInit();
   DEBUG_PRINT_OLSR_SYSTEM("Device init finish\n");
 }
+/**
+ * @brief this function is used to get SeqNumber(Message global)
+ * @return uint16_t MessageSeqNumber(0->2^16-1)
+**/
 static uint16_t getSeqNumber()
 {
   uint16_t retVal= 0;
@@ -901,7 +905,10 @@ void olsrPacketDispatch(const packet_t* rxPacket)
     // olsrRoutingTableComputation();
 }
 
-//send related function
+/**
+ * @brief this funcition is used to send Hello Message
+ * 
+ **/
 
 void olsrSendHello()
 {
@@ -963,11 +970,11 @@ void olsrSendHello()
                 {
                   if(olsrNeighborSet.setData[neighborTupleIndex].data.m_status == STATUS_SYM)
                     {
-                      nbType = OLSR_SYM_NEIGH; //is a sym neighbor
+                      nbType = OLSR_SYM_NEIGH; //is a sym neighbor 1
                     }
                   else if(olsrNeighborSet.setData[neighborTupleIndex].data.m_status == STATUS_NOT_SYM)
                     {
-                      nbType = OLSR_NOT_NEIGH; // is not a sym neghbor
+                      nbType = OLSR_NOT_NEIGH; // is not a sym neghbor 0
                     }
                   else
                     {
@@ -1171,7 +1178,8 @@ void olsrHelloTask(void *ptr)
   while (true)
   {
       /* code */
-      DEBUG_PRINT_OLSR_SEND("HELLO_SEND TO QUEUE\n");
+      vTaskDelay(M2T(OLSR_HELLO_INTERVAL));
+      DEBUG_PRINT_OLSR_SEND("HELLO_INTERVAL\n");
       xSemaphoreTake(olsrLinkSetLock,portMAX_DELAY);
       xSemaphoreTake(olsrNeighborSetLock,portMAX_DELAY);
       xSemaphoreTake(olsrMprSetLock,portMAX_DELAY);
@@ -1179,7 +1187,6 @@ void olsrHelloTask(void *ptr)
       xSemaphoreGive(olsrMprSetLock);
       xSemaphoreGive(olsrNeighborSetLock);
       xSemaphoreGive(olsrLinkSetLock);
-      vTaskDelay(M2T(OLSR_HELLO_INTERVAL));
   }
 }
 
