@@ -126,8 +126,8 @@ typedef struct{
 //message 
 typedef struct
 {
-    olsrMessageHeader_t m_messageHeader;
-    uint8_t m_messagePayload[MESSAGE_MAX_LENGTH-sizeof(olsrMessageHeader_t)];
+    olsrMessageHeader_t m_messageHeader; //16bytes
+    uint8_t m_messagePayload[MESSAGE_MAX_LENGTH-sizeof(olsrMessageHeader_t)];//84bytes
     //int content_size;
 } __attribute__((packed)) olsrMessage_t;
 
