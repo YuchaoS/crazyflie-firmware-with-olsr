@@ -181,7 +181,10 @@ static void olsrLinkSetInit(olsrLinkSet_t *linkSet)
   linkSet->freeQueueEntry = 0;
   linkSet->fullQueueEntry = -1;
 }
-
+/**
+ * @brief 
+ * @return
+ **/
 static setIndex_t olsrLinkSetMalloc(olsrLinkSet_t *linkSet)
 {
   // xSemaphoreTake(olsrLinkEmptySetLock, portMAX_DELAY);
@@ -193,13 +196,13 @@ static setIndex_t olsrLinkSetMalloc(olsrLinkSet_t *linkSet)
     }
   else
     { 
-      setIndex_t candidate = linkSet->freeQueueEntry;
-      linkSet->freeQueueEntry = linkSet->setData[candidate].next;
+      setIndex_t candidate = linkSet->freeQueueEntry;   // 0 2 3 5 6 -1 freequeentey
+      linkSet->freeQueueEntry = linkSet->setData[candidate].next; //  1 4 -1 fullqueueentry
       // xSemaphoreGive(olsrLinkEmptySetLock);
       //insert tlinkSet->
       // xSemaphoreTake(olsrLinkFullSetLock, portMAX_DELAY);
-      setIndex_t tmp = linkSet->fullQueueEntry;
-      linkSet->fullQueueEntry = candidate;
+      setIndex_t tmp = linkSet->fullQueueEntry; // -1
+      linkSet->fullQueueEntry = candidate; // 0 -1
       linkSet->setData[candidate].next = tmp;
       // xSemaphoreGive(olsrLinkFullSetLock);
       return candidate;
@@ -229,7 +232,7 @@ static bool olsrLinkSetFree(olsrLinkSet_t *linkSet,setIndex_t delItem)
         {
           if(linkSet->setData[pre].next==delItem)
             {
-              linkSet->setData[pre].next = linkSet->setData[delItem].next;
+              linkSet->setData[pre].next = linkSet->setData[delItem].next;//next.next
               // xSemaphoreGive(olsrLinkFullSetLock);
               //insert to empty queue
               // xSemaphoreTake(olsrLinkEmptySetLock,portMAX_DELAY);
@@ -266,6 +269,7 @@ setIndex_t olsrInsertToLinkSet(olsrLinkSet_t *linkSet,const olsrLinkTuple_t *ite
   if(candidate!=-1)
     {
       memcpy(&linkSet->setData[candidate].data,item,sizeof(olsrLinkTuple_t));
+      
     }
   else
     {
@@ -682,7 +686,8 @@ bool olsrFindMprByAddr(olsrMprSet_t *mprSet,\
         }
       it = mprSet->setData[it].next;
     }
-  return isFound;
+  return isFound; 
+  //TODO checkout lock all
 }
 
 void olsrPrintMprSet(olsrMprSet_t *mprSet)

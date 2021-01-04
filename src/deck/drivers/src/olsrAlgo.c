@@ -440,14 +440,15 @@ void mprCompute()
   olsrTwoHopNeighborSet_t N2;
   olsrTwoHopNeighborSetInit(&N2);
 
-  setIndex_t itForTwoHopNeighBorSet = olsrTwoHopNeighborSet.fullQueueEntry;
-  while(itForTwoHopNeighBorSet != -1)
+  setIndex_t itForTwoHopNeighborSet = olsrTwoHopNeighborSet.fullQueueEntry;
+  while(itForTwoHopNeighborSet != -1)
     {
-      olsrTwoHopNeighborSetItem_t twoHopNTuple = olsrTwoHopNeighborSet.setData[itForTwoHopNeighBorSet];
+      olsrTwoHopNeighborSetItem_t twoHopNTuple = olsrTwoHopNeighborSet.setData[itForTwoHopNeighborSet];
       //two hop neighbor can not equal to myself
+      //TODO bianli fangshi check
       if(twoHopNTuple.data.m_twoHopNeighborAddr == myAddress)
         {
-          itForTwoHopNeighBorSet = twoHopNTuple.next;
+          itForTwoHopNeighborSet = twoHopNTuple.next;
           continue;
         }
       
@@ -465,7 +466,7 @@ void mprCompute()
         }
       if(!ok)
         {
-          itForTwoHopNeighBorSet = twoHopNTuple.next;
+          itForTwoHopNeighborSet = twoHopNTuple.next;
           DEBUG_PRINT_OLSR_MPR("464 continue\n");
           continue;
         }
@@ -473,7 +474,7 @@ void mprCompute()
       itForN = N.fullQueueEntry;
       while(itForN != -1)
         {
-          if(N.setData[itForN].data.m_neighborAddr == twoHopNTuple.data.m_twoHopNeighborAddr)
+          if(N.setData[itForN].data.m_neighborAddr == twoHopNTuple.data.m_twoHopNeighborAddr) //A-B A-C B-C
             {
               ok = false;
               break;
@@ -486,7 +487,7 @@ void mprCompute()
           olsrInsertToTwoHopNeighborSet(&N2,&twoHopNTuple.data);
         }
 
-      itForTwoHopNeighBorSet = twoHopNTuple.next;
+      itForTwoHopNeighborSet = twoHopNTuple.next;
     }
 
   olsrAddr_t coveredTwoHopNeighbors[TWO_HOP_NEIGHBOR_SET_T];
@@ -496,7 +497,7 @@ void mprCompute()
     }
   uint8_t lenthOfCoveredTwoHopNeighbor = 0;
     //find the unique pair of two hop neighborN2
-  setIndex_t n2It = N2.fullQueueEntry;
+  setIndex_t n2It = N2.fullQueueEntry; //A-B-C  A-Q-C  A-E-F 
   while(n2It != -1)
     {
       bool onlyOne = true;
@@ -511,7 +512,7 @@ void mprCompute()
             }
           otherN2It = N2.setData[otherN2It].next;
         }
-      if(onlyOne&&!olsrFindMprByAddr(&olsrMprSet, N2.setData[n2It].data.m_neighborAddr))
+      if(onlyOne&&!olsrFindMprByAddr(&olsrMprSet, N2.setData[n2It].data.m_neighborAddr))//TODO if 
         {
           DEBUG_PRINT_OLSR_MPR("this addr:% is matched a isolatied node in two hop\n",N2.setData[n2It].data.m_neighborAddr);
           olsrMprTuple_t item;
@@ -553,9 +554,9 @@ void mprCompute()
           if(tmp != itForEraseFromN2) continue;
         }
       itForEraseFromN2 = N2.setData[itForEraseFromN2].next;
-    }
+    } //TODO 有一些冗余
   int count = 0;
-  while(N2.fullQueueEntry != -1&&count<10)
+  while(N2.fullQueueEntry != -1&&count<10) //N N2 A-B-C A-Q-C A-G-
     {
       count++;
       DEBUG_PRINT_OLSR_NEIGHBOR2("in mpr cmpute !!!\n");
@@ -622,6 +623,7 @@ void olsrProcessHello(const olsrMessage_t* helloMsg)
   xSemaphoreTake(olsrTwoHopNeighborSetLock,portMAX_DELAY);
   xSemaphoreTake(olsrMprSetLock,portMAX_DELAY);
   xSemaphoreTake(olsrMprSelectorSetLock,portMAX_DELAY);
+  olsrLinkTupleClearExpire();
   linkSensing(helloMsg);
   populateNeighborSet(helloMsg);
   populateTwoHopNeighborSet(helloMsg);  
@@ -990,11 +992,12 @@ void olsrSendHello()
               linkTupleIndex = olsrLinkSet.setData[linkTupleIndex].next;
               continue;
             }
-        }
+        } //TODO -1 in queue will be not dropped
         olsrLinkMessage_t linkMessage;
         linkMessage.m_linkCode = (linkType & 0x03) | ((nbType << 2) & 0x0f);
         linkMessage.m_addressUsedSize = 1;
         linkMessage.m_addresses = olsrLinkSet.setData[linkTupleIndex].data.m_neighborAddr;
+        DEBUG_PRINT_OLSR_HELLO("link message max num: %d",LINK_MESSAGE_MAX_NUM);//ADD
         if(helloMessage.m_helloHeader.m_linkMessageNumber==LINK_MESSAGE_MAX_NUM) break;
         helloMessage.m_linkMessage[helloMessage.m_helloHeader.m_linkMessageNumber++] = linkMessage;
         linkTupleIndex = olsrLinkSet.setData[linkTupleIndex].next;
@@ -1067,9 +1070,7 @@ bool olsrLinkTupleClearExpire() //
       olsrLinkSetItem_t tmp = olsrLinkSet.setData[candidate];
       if(tmp.data.m_expirationTime < now)
         {
-          xSemaphoreTake(olsrNeighborSetLock,portMAX_DELAY);
           olsrDelNeighborByAddr(tmp.data.m_neighborAddr);
-          xSemaphoreGive(olsrNeighborSetLock);
           setIndex_t delItem = candidate;
           candidate = tmp.next;
           olsrDelLinkTupleByPos(delItem);
@@ -1078,28 +1079,13 @@ bool olsrLinkTupleClearExpire() //
         }
       else if(tmp.data.m_symTime < now)
         {
-          if(m_linkTupleTimerFirstTime)
-            {
-              m_linkTupleTimerFirstTime = false;
-            }
-          else
-            {
-              expireSymVec[length++] = tmp.data.m_neighborAddr;
-            }
+          expireSymVec[length++] = tmp.data.m_neighborAddr;
         }
       candidate = tmp.next;
     }
   if(length > 0)
     {
-      xSemaphoreTake(olsrNeighborSetLock,portMAX_DELAY);
-      xSemaphoreTake(olsrTwoHopNeighborSetLock,portMAX_DELAY);
-      xSemaphoreTake(olsrMprSetLock,portMAX_DELAY);
-      xSemaphoreTake(olsrMprSelectorSetLock,portMAX_DELAY);
       olsrNeighborLoss(expireSymVec, length);
-      xSemaphoreGive(olsrMprSelectorSetLock);
-      xSemaphoreGive(olsrMprSetLock);
-      xSemaphoreGive(olsrTwoHopNeighborSetLock);
-      xSemaphoreGive(olsrNeighborSetLock);
     }
   DEBUG_PRINT_OLSR_LINK("in clean link set finished\n");
   return isChange;
@@ -1182,9 +1168,14 @@ void olsrHelloTask(void *ptr)
       DEBUG_PRINT_OLSR_SEND("HELLO_INTERVAL\n");
       xSemaphoreTake(olsrLinkSetLock,portMAX_DELAY);
       xSemaphoreTake(olsrNeighborSetLock,portMAX_DELAY);
+      xSemaphoreTake(olsrTwoHopNeighborSetLock,portMAX_DELAY);
       xSemaphoreTake(olsrMprSetLock,portMAX_DELAY);
+      xSemaphoreTake(olsrMprSelectorSetLock,portMAX_DELAY);
+      olsrLinkTupleClearExpire();
       olsrSendHello();
+      xSemaphoreGive(olsrMprSelectorSetLock);
       xSemaphoreGive(olsrMprSetLock);
+      xSemaphoreGive(olsrTwoHopNeighborSetLock);
       xSemaphoreGive(olsrNeighborSetLock);
       xSemaphoreGive(olsrLinkSetLock);
   }

@@ -89,7 +89,7 @@
 #define MESSAGE_PAYLOAD_MAX_SIZE  84 //(messageMaxSize-sizeof(olsr_message_hdr_t))
 #define LINK_ADDRESS_MAX_NUM 10
 #define LINK_MESSAGE_MAX_NUM ((MESSAGE_PAYLOAD_MAX_SIZE-sizeof(olsrHelloMessageHeader_t))\
-                              /sizeof(olsrLinkMessage_t))
+                              /sizeof(olsrLinkMessage_t)) 
 #define TC_PAYLOAD_MAX_NUM ((MESSAGE_PAYLOAD_MAX_SIZE-2)/sizeof(olsrTopologyMessageUint_t))
 
 typedef struct{
@@ -143,7 +143,7 @@ typedef struct{
     uint8_t m_reserved;
     uint16_t m_addressUsedSize;
     olsrAddr_t m_addresses; //this item may be vector if multi-interface support is needed.
-} __attribute__((packed)) olsrLinkMessage_t; //4+2*10bytes
+} __attribute__((packed)) olsrLinkMessage_t; //6
 
 typedef struct{
     olsrHelloMessageHeader_t  m_helloHeader;

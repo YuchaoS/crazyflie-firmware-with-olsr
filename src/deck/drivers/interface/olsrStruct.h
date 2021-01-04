@@ -234,8 +234,8 @@ typedef struct
 typedef struct
 {
   olsrLinkSetItem_t setData[LINK_SET_SIZE];
-  setIndex_t freeQueueEntry;
-  setIndex_t fullQueueEntry; 
+  setIndex_t freeQueueEntry; //pos0
+  setIndex_t fullQueueEntry; //-1
 } olsrLinkSet_t;
 
 
