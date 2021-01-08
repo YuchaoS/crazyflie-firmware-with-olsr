@@ -20,18 +20,6 @@ typedef uint16_t olsrAddr_t;
 typedef short olsrDist_t;
 typedef short setIndex_t;
 
-
-#define OLSR_SETS_NUM 8
-#define TOPOLOGY_SET_T 0
-#define MPR_SET_T 1
-#define NEIGHBOR_SET_T 2
-#define DUPLICATE_SET_T 3
-#define MPR_SELECT_SET_T 4
-#define TWO_HOP_NEIGHBOR_SET_T 5
-#define TIMESTAMP_SET_T 6
-#define LINK_SET_T 7
-
-
 #define TOPOLOGY_SET_SIZE 30
 #define LINK_SET_SIZE 30
 #define MPR_SET_SIZE 30
@@ -313,7 +301,7 @@ void olsrPrintLinkSet(olsrLinkSet_t *linkSet);
 
 setIndex_t olsrFindSymLinkTuple(olsrLinkSet_t *linkSet,olsrAddr_t sender,olsrTime_t now);
 
-void olsrDelLinkTupleByPos(setIndex_t pos);
+void olsrDelLinkTupleByPos(olsrLinkSet_t *linkSet,setIndex_t pos);
 
 /* twoHopNeighbor*/
 void olsrTwoHopNeighborSetInit(olsrTwoHopNeighborSet_t *twoHopNeighborSet);
@@ -334,7 +322,7 @@ setIndex_t olsrEraseTwoHopNeighborTupleByTuple(olsrTwoHopNeighborSet_t *twoHopNe
 void olsrEraseTwoHopNeighborTupleByNeighborAddr(olsrTwoHopNeighborSet_t *twoHopNeighborSet,\
                                   olsrAddr_t neighborAddr);
 
-void olsrDelTwoHopNeighborTupleByPos(setIndex_t pos);
+void olsrDelTwoHopNeighborTupleByPos(olsrTwoHopNeighborSet_t *twoHopNeighborSet,setIndex_t pos);
 
 void olsrPrintTwoHopNeighborSet(olsrTwoHopNeighborSet_t *twoHopNeighborSet);
 
@@ -350,7 +338,7 @@ void olsrNeighborSetInit(olsrNeighborSet_t *neighborSet);
 void olsrPrintNeighborSet(olsrNeighborSet_t *neighborSet);
 
 
-bool olsrDelNeighborByAddr(olsrAddr_t addr);
+bool olsrDelNeighborByAddr(olsrNeighborSet_t *neighborSet,olsrAddr_t addr);
 
 /*topologySet */
 setIndex_t olsrInsertToTopologySet(olsrTopologySet_t *topologySet,\

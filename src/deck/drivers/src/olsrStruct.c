@@ -246,9 +246,9 @@ static bool olsrLinkSetFree(olsrLinkSet_t *linkSet,setIndex_t delItem)
     }
     return false;
 }
-void olsrDelLinkTupleByPos(setIndex_t pos)
+void olsrDelLinkTupleByPos(olsrLinkSet_t *linkset,setIndex_t pos)
 {
-  olsrLinkSetFree(&olsrLinkSet ,pos);
+  olsrLinkSetFree(linkset ,pos);
 }
 setIndex_t olsrFindInLinkByAddr(olsrLinkSet_t *linkSet,const olsrAddr_t addr)
 {
@@ -388,12 +388,12 @@ static bool olsrNeighborSetFree(olsrNeighborSet_t *neighborSet, \
     return false;
 }
 
-bool olsrDelNeighborByAddr(olsrAddr_t addr)
+bool olsrDelNeighborByAddr(olsrNeighborSet_t *neighborSet,olsrAddr_t addr)
 {
-  setIndex_t candidate = olsrFindNeighborByAddr(&olsrNeighborSet,addr);
+  setIndex_t candidate = olsrFindNeighborByAddr(neighborSet,addr);
   if(candidate != -1)
     {
-      olsrNeighborSetFree(&olsrNeighborSet,candidate);
+      olsrNeighborSetFree(neighborSet,candidate);
       return true;
     }
   return false;
@@ -570,9 +570,9 @@ setIndex_t olsrEraseTwoHopNeighborTuple(olsrTwoHopNeighborSet_t *twoHopNeighborS
   return candidate;
 }
 
-void olsrDelTwoHopNeighborTupleByPos(setIndex_t pos)
+void olsrDelTwoHopNeighborTupleByPos(olsrTwoHopNeighborSet_t *twoHopNeighborSet,setIndex_t pos)
 {
-  olsrTwoHopNeighborSetFree(&olsrTwoHopNeighborSet ,pos);
+  olsrTwoHopNeighborSetFree(twoHopNeighborSet ,pos);
 }
 
 void olsrEraseTwoHopNeighborTupleByNeighborAddr(olsrTwoHopNeighborSet_t *twoHopNeighborSet,\

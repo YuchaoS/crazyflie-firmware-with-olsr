@@ -55,29 +55,33 @@ static uint16_t g_staticMessageSeq = 0;
 static uint16_t g_ansn = 0;
 static SemaphoreHandle_t olsrMessageSeqLock;
 static SemaphoreHandle_t olsrAnsnLock;
-static bool m_linkTupleTimerFirstTime  = true;
+static SemaphoreHandle_t olsrAllSetLock;
+// static bool m_linkTupleTimerFirstTime  = true;
 
 //TODO define packet and message struct once, save space
 //debugging, to be deleted
 //TODO delete testDataLength2send
-
+bool olsrMprSelectorTupleTimerExpire();
+bool  olsrLinkTupleClearExpire();
+bool  olsrNbTwoHopTupleTimerExpire();
 
 //rxcallback
 
 static void olsrSendQueueInit()
 {
-  g_olsrSendQueue = xQueueCreate(10,sizeof(olsrMessage_t));
+  g_olsrSendQueue = xQueueCreate(15,sizeof(olsrMessage_t));
   DEBUG_PRINT_OLSR_SYSTEM("SEND_QUEUE_INIT_SUCCESSFUL\n");
 }
 static void olsrRecvQueueInit()
 {
-  g_olsrRecvQueue = xQueueCreate(10,sizeof(packet_t));
+  g_olsrRecvQueue = xQueueCreate(15,sizeof(packet_t));
   DEBUG_PRINT_OLSR_SYSTEM("RECV_QUEUE_INIT_SUCCESSFUL\n");
 }
 void olsrDeviceInit(dwDevice_t *dev){
   dwm = dev;
   olsrMessageSeqLock = xSemaphoreCreateMutex();
   olsrAnsnLock = xSemaphoreCreateMutex();
+  olsrAllSetLock = xSemaphoreCreateMutex();
   olsrSendQueueInit();
   olsrRecvQueueInit();
   DEBUG_PRINT_OLSR_SYSTEM("Device init finish\n");
@@ -97,7 +101,7 @@ static uint16_t getSeqNumber()
 void olsrRxCallback(dwDevice_t *dev){
     packet_t rxPacket;
     DEBUG_PRINT_OLSR_SYSTEM("rxCallBack\n");
-    int dataLength = dwGetDataLength(dwm);
+    unsigned int dataLength = dwGetDataLength(dwm);
     if(dataLength==0){
         DEBUG_PRINT_OLSR_RECEIVE("DataLen=0!\n");
 				return;
@@ -123,6 +127,7 @@ void olsrRxCallback(dwDevice_t *dev){
     DEBUG_PRINT_OLSR_RECEIVE("src: %X%X%X\n", u64>>32, u64, u64);
     #endif
     xQueueSend(g_olsrRecvQueue,&rxPacket,portMAX_DELAY);
+    DEBUG_PRINT_OLSR_SYSTEM("leave from rxcallback\n");
 }
 //routing table compute
 void olsr_routing_table_compute(){
@@ -254,7 +259,7 @@ static void linkSensing(const olsrMessage_t* helloMsg)
       newLinkTuple.m_localAddr = myAddress;
       newLinkTuple.m_neighborAddr = helloMsg->m_messageHeader.m_originatorAddress;
       newLinkTuple.m_symTime = now - M2T(1000);
-      newLinkTuple.m_expirationTime = now + helloMsg->m_messageHeader.m_vTime*1000;
+      newLinkTuple.m_expirationTime = now + helloMsg->m_messageHeader.m_vTime;
       linkTuple = olsrInsertToLinkSet(&olsrLinkSet,&newLinkTuple);
       if(linkTuple==-1)
         {
@@ -291,7 +296,7 @@ static void linkSensing(const olsrMessage_t* helloMsg)
           else if(lt == OLSR_SYM_LINK ||lt == OLSR_ASYM_LINK)
             {
               olsrLinkSet.setData[linkTuple].data.m_symTime = now +helloMsg->m_messageHeader.m_vTime;
-              olsrLinkSet.setData[linkTuple].data.m_expirationTime = olsrLinkSet.setData[linkTuple].data.m_symTime+OLSR_NEIGHB_HOLD_TIME*1000;
+              olsrLinkSet.setData[linkTuple].data.m_expirationTime = olsrLinkSet.setData[linkTuple].data.m_symTime+OLSR_NEIGHB_HOLD_TIME;
               updated = true;
             }
           else
@@ -427,14 +432,14 @@ void mprCompute()
   olsrNeighborSet_t N;
   olsrNeighborSetInit(&N);
 
-  setIndex_t itForolsrNeighborSet = olsrNeighborSet.fullQueueEntry;
-  while(itForolsrNeighborSet != -1)
+  setIndex_t itForOlsrNeighborSet = olsrNeighborSet.fullQueueEntry;
+  while(itForOlsrNeighborSet != -1)
     {
-      if(olsrNeighborSet.setData[itForolsrNeighborSet].data.m_status == STATUS_SYM)
+      if(olsrNeighborSet.setData[itForOlsrNeighborSet].data.m_status == STATUS_SYM)
         {
-          olsrInsertToNeighborSet(&N,&olsrNeighborSet.setData[itForolsrNeighborSet].data);
+          olsrInsertToNeighborSet(&N,&olsrNeighborSet.setData[itForOlsrNeighborSet].data);
         }
-      itForolsrNeighborSet = olsrNeighborSet.setData[itForolsrNeighborSet].next;
+      itForOlsrNeighborSet = olsrNeighborSet.setData[itForOlsrNeighborSet].next;
     }
   
   olsrTwoHopNeighborSet_t N2;
@@ -489,23 +494,28 @@ void mprCompute()
 
       itForTwoHopNeighborSet = twoHopNTuple.next;
     }
-
-  olsrAddr_t coveredTwoHopNeighbors[TWO_HOP_NEIGHBOR_SET_T];
-  for(int i =0;i<TWO_HOP_NEIGHBOR_SET_T;i++)
+  DEBUG_PRINT_OLSR_MPR("IN MPR COMPUTE****:\n");
+  olsrPrintNeighborSet(&N);
+  olsrPrintTwoHopNeighborSet(&N2);
+  DEBUG_PRINT_OLSR_MPR("************\n");
+  olsrAddr_t coveredTwoHopNeighbors[TWO_HOP_NEIGHBOR_SET_SIZE];
+  for(int i =0;i<TWO_HOP_NEIGHBOR_SET_SIZE;i++)
     {
       coveredTwoHopNeighbors[i] = 0;
     }
-  uint8_t lenthOfCoveredTwoHopNeighbor = 0;
+  int lenthOfCoveredTwoHopNeighbor = 0;
     //find the unique pair of two hop neighborN2
-  setIndex_t n2It = N2.fullQueueEntry; //A-B-C  A-Q-C  A-E-F 
+  setIndex_t n2It = N2.fullQueueEntry;
+   //A-B-C  A-Q-C  A-E-F 
+   DEBUG_PRINT_OLSR_MPR("mid\n");
+  DEBUG_PRINT_OLSR_MPR("n2It is %d\n",n2It);
   while(n2It != -1)
     {
       bool onlyOne = true;
       setIndex_t otherN2It = N2.fullQueueEntry;
       while(otherN2It != -1)
         {
-          if(N2.setData[otherN2It].data.m_twoHopNeighborAddr == N2.setData[n2It].data.m_twoHopNeighborAddr\
-            &&N2.setData[otherN2It].data.m_neighborAddr != N2.setData[n2It].data.m_neighborAddr)
+          if(N2.setData[otherN2It].data.m_twoHopNeighborAddr == N2.setData[n2It].data.m_twoHopNeighborAddr &&N2.setData[otherN2It].data.m_neighborAddr != N2.setData[n2It].data.m_neighborAddr)
             {
               onlyOne = false;
               break;
@@ -532,16 +542,16 @@ void mprCompute()
       n2It = N2.setData[n2It].next;
     }
 
-  //erase 
+  // //erase 
   DEBUG_PRINT_OLSR_MPR("lenthOfCoveredTwoHopNeighbor is %d\n",lenthOfCoveredTwoHopNeighbor);
+  vTaskDelay(1000);
   setIndex_t itForEraseFromN2 = N2.fullQueueEntry;
   while(itForEraseFromN2 != -1)
     {
       bool find = false;
       for(int i=0;i<lenthOfCoveredTwoHopNeighbor;i++)
         {
-          if(coveredTwoHopNeighbors[i] \
-              == N2.setData[itForEraseFromN2].data.m_twoHopNeighborAddr)
+          if(coveredTwoHopNeighbors[i] == N2.setData[itForEraseFromN2].data.m_twoHopNeighborAddr)
             {
               find = true;
               break;
@@ -618,23 +628,32 @@ void olsrProcessHello(const olsrMessage_t* helloMsg)
   /*
   link->nb->nb2->mpr->mprs
   */
-  xSemaphoreTake(olsrLinkSetLock,portMAX_DELAY);
-  xSemaphoreTake(olsrNeighborSetLock,portMAX_DELAY);
-  xSemaphoreTake(olsrTwoHopNeighborSetLock,portMAX_DELAY);
-  xSemaphoreTake(olsrMprSetLock,portMAX_DELAY);
-  xSemaphoreTake(olsrMprSelectorSetLock,portMAX_DELAY);
-  olsrLinkTupleClearExpire();
+  // xSemaphoreTake(olsrLinkSetLock,portMAX_DELAY);
+  // xSemaphoreTake(olsrNeighborSetLock,portMAX_DELAY);
+  // xSemaphoreTake(olsrTwoHopNeighborSetLock,portMAX_DELAY);
+  // xSemaphoreTake(olsrMprSetLock,portMAX_DELAY);
+  // xSemaphoreTake(olsrMprSelectorSetLock,portMAX_DELAY);
+  DEBUG_PRINT_OLSR_HELLO("to take set lock in process hello\n");
+  xSemaphoreTake(olsrAllSetLock,portMAX_DELAY);
+  DEBUG_PRINT_OLSR_HELLO("got set lock in process hello\n");
+  olsrLinkTupleClearExpire();//
+  olsrNbTwoHopTupleTimerExpire();
+  olsrMprSelectorTupleTimerExpire();
   linkSensing(helloMsg);
   populateNeighborSet(helloMsg);
-  populateTwoHopNeighborSet(helloMsg);  
-  // mprCompute();
+  populateTwoHopNeighborSet(helloMsg); 
+  DEBUG_PRINT_OLSR_HELLO("to compute mpr\n");
+  mprCompute();
   populateMprSelectorSet(helloMsg);
   olsrPrintAll();
-  xSemaphoreGive(olsrMprSelectorSetLock);
-  xSemaphoreGive(olsrMprSetLock);
-  xSemaphoreGive(olsrTwoHopNeighborSetLock);
-  xSemaphoreGive(olsrNeighborSetLock);
-  xSemaphoreGive(olsrLinkSetLock);
+  xSemaphoreGive(olsrAllSetLock);
+  DEBUG_PRINT_OLSR_HELLO("free set lock in process hello\n");
+
+  // xSemaphoreGive(olsrMprSelectorSetLock);
+  // xSemaphoreGive(olsrMprSetLock);
+  // xSemaphoreGive(olsrTwoHopNeighborSetLock);
+  // xSemaphoreGive(olsrNeighborSetLock);
+  // xSemaphoreGive(olsrLinkSetLock);
 }
 //
 void olsrProcessTc(const olsrMessage_t* tcMsg)
@@ -719,18 +738,19 @@ void forwardDefault(olsrMessage_t* olsrMessage, setIndex_t duplicateIndex)
 //switch to tc|hello|ts process
 void olsrPrintPacket(const packet_t* rxPacket)
 {
-  DEBUG_PRINT_OLSR_HELLO("PRINT A HELLO PACKET:\n");
   olsrPacket_t* olsrPacket = (olsrPacket_t*)rxPacket->payload;
   int lengthPacket = olsrPacket->m_packetHeader.m_packetLength;
   DEBUG_PRINT_OLSR_HELLO("packet Length: %d\n",lengthPacket);
   void* olsrMessage = (void *)olsrPacket->m_packetPayload;
-  int index = 4;
+  unsigned int index = 4;
+  return;
+  //TODO 一个packet里有俩个helloMessage
   while(index < lengthPacket)
   {
     olsrMessage_t *olsrIndex = (olsrMessage_t *)olsrMessage;
     if(olsrIndex->m_messageHeader.m_messageType==HELLO_MESSAGE)
       {
-        DEBUG_PRINT_OLSR_HELLO("this message is hello msg\n");
+        DEBUG_PRINT_OLSR_HELLO("hello msg from %d\n",olsrIndex->m_messageHeader.m_originatorAddress);
         olsrHelloMessage_t* helloMessage = (olsrHelloMessage_t *)olsrIndex->m_messagePayload;
         uint8_t length = helloMessage->m_helloHeader.m_linkMessageNumber;
         DEBUG_PRINT_OLSR_HELLO("linkNumber:%d\n",length);
@@ -745,7 +765,7 @@ void olsrPrintPacket(const packet_t* rxPacket)
       {
         DEBUG_PRINT_OLSR_TC("this message is tc msg\n");
         olsrTopologyMessage_t *tcMessage = (olsrTopologyMessage_t *) olsrIndex->m_messagePayload;
-        uint8_t count = (olsrIndex->m_messageHeader.m_messageSize- sizeof(olsrMessageHeader_t) - 2)/ \
+        unsigned int count = (olsrIndex->m_messageHeader.m_messageSize- sizeof(olsrMessageHeader_t) - 2)/ \
                     sizeof(olsrTopologyMessageUint_t);
         for(int i = 0;i < count; i++)
           {
@@ -753,6 +773,7 @@ void olsrPrintPacket(const packet_t* rxPacket)
           }
       }
   }
+  DEBUG_PRINT_OLSR_HELLO("leave PrintPacket function\n");
 }
 void olsrRoutingTableComputation()
 {
@@ -790,7 +811,7 @@ void olsrRoutingTableComputation()
           setIndex_t routingIt = tmpRoutingSet.fullQueueEntry;
           setIndex_t routeCanLinkToTc = -1;
           bool isFound = false;
-          int length = 0;
+          olsrDist_t length = 0;
           while(routingIt != -1)
             {
               if(tmpRoutingSet.setData[routingIt].data.m_destAddr == tmpTc.data.m_lastAddr)
@@ -838,7 +859,8 @@ void olsrRoutingTableComputation()
 }
 void olsrPacketDispatch(const packet_t* rxPacket)
 {
-  DEBUG_PRINT_OLSR_SYSTEM("PACKET_DISPATCH\n");  
+  DEBUG_PRINT_OLSR_HELLO("PACKET_DISPATCH\n");  
+  olsrPrintPacket(rxPacket);
   // olsrPrintHelloPacket(rxPacket);
   //need to add a condition whether recvive a packet from self
   olsrPacket_t* olsrPacket = (olsrPacket_t* )rxPacket->payload;
@@ -855,7 +877,6 @@ void olsrPacketDispatch(const packet_t* rxPacket)
           message += messageHeader->m_messageSize;
           continue;
         }
-      xSemaphoreTake(olsrDuplicateSetLock,portMAX_DELAY);
       bool doForward = true;
       setIndex_t duplicated = olsrFindInDuplicateSet(&olsrDuplicateSet,messageHeader->m_originatorAddress,\
                                                      messageHeader->m_messageSeq);
@@ -914,7 +935,7 @@ void olsrPacketDispatch(const packet_t* rxPacket)
 
 void olsrSendHello()
 {
-  olsrMessage_t msg;
+  olsrMessage_t msg; //100
   //message header initial
   memset(&msg,0,sizeof(msg));
   msg.m_messageHeader.m_messageType = HELLO_MESSAGE;
@@ -927,14 +948,14 @@ void olsrSendHello()
   msg.m_messageHeader.m_hopCount = 0;
   msg.m_messageHeader.m_messageSeq = getSeqNumber();
   //hello message
-  olsrHelloMessage_t helloMessage;
+  olsrHelloMessage_t helloMessage;//84
   helloMessage.m_helloHeader.m_hTime = OLSR_HELLO_INTERVAL; //hello's header on packet
   helloMessage.m_helloHeader.m_willingness = WILL_ALWAYS;
   helloMessage.m_helloHeader.m_linkMessageNumber = 0;
 
   //loop
-  setIndex_t linkTupleIndex = olsrLinkSet.fullQueueEntry;
-  olsrTime_t now = xTaskGetTickCount();
+  setIndex_t linkTupleIndex = olsrLinkSet.fullQueueEntry;//2
+  olsrTime_t now = xTaskGetTickCount();//4
   while(linkTupleIndex!=-1)
     {
       if(!(olsrLinkSet.setData[linkTupleIndex].data.m_localAddr == myAddress &&\
@@ -957,7 +978,7 @@ void olsrSendHello()
         {
           linkType = OLSR_LOST_LINK;//3
         }
-      if(olsrFindMprByAddr(&olsrMprSet, olsrLinkSet.setData[linkTupleIndex].data.m_neighborAddr))
+      if(olsrFindMprByAddr(&olsrMprSet, olsrLinkSet.setData[linkTupleIndex].data.m_neighborAddr))//reg+3.4
         {
            nbType = OLSR_MPR_NEIGH;//2
         }
@@ -993,21 +1014,23 @@ void olsrSendHello()
               continue;
             }
         } //TODO -1 in queue will be not dropped
-        olsrLinkMessage_t linkMessage;
+        olsrLinkMessage_t linkMessage;//6
         linkMessage.m_linkCode = (linkType & 0x03) | ((nbType << 2) & 0x0f);
         linkMessage.m_addressUsedSize = 1;
         linkMessage.m_addresses = olsrLinkSet.setData[linkTupleIndex].data.m_neighborAddr;
-        DEBUG_PRINT_OLSR_HELLO("link message max num: %d",LINK_MESSAGE_MAX_NUM);//ADD
+        DEBUG_PRINT_OLSR_HELLO("link message max num: %d\n",LINK_MESSAGE_MAX_NUM);//ADD
         if(helloMessage.m_helloHeader.m_linkMessageNumber==LINK_MESSAGE_MAX_NUM) break;
         helloMessage.m_linkMessage[helloMessage.m_helloHeader.m_linkMessageNumber++] = linkMessage;
         linkTupleIndex = olsrLinkSet.setData[linkTupleIndex].next;
+        DEBUG_PRINT_OLSR_HELLO("in function sendHello NextIndex=:%d",linkTupleIndex);
     }
   uint16_t writeSize = sizeof(olsrHelloMessageHeader_t)+helloMessage.m_helloHeader.m_linkMessageNumber*\
                        sizeof(olsrLinkMessage_t);
   msg.m_messageHeader.m_messageSize +=  writeSize;                 
   memcpy(msg.m_messagePayload,&helloMessage,writeSize);
-  DEBUG_PRINT_OLSR_SEND("send a message with length:%d\n",msg.m_messageHeader.m_messageSize);
+  DEBUG_PRINT_OLSR_HELLO("send a message with length:%d\n",msg.m_messageHeader.m_messageSize);
   xQueueSend(g_olsrSendQueue,&msg,portMAX_DELAY);
+  DEBUG_PRINT_OLSR_HELLO("send to send q successful\n");
 }
 
 
@@ -1055,7 +1078,6 @@ bool olsrLinkTupleClearExpire() //
    /*
   link->nb->nb2->mpr->mprs
   */
-  DEBUG_PRINT_OLSR_LINK("in clean link set\n");
   setIndex_t candidate = olsrLinkSet.fullQueueEntry;
   olsrTime_t now = xTaskGetTickCount();
   bool isChange = false;
@@ -1068,12 +1090,13 @@ bool olsrLinkTupleClearExpire() //
   while(candidate != -1)
     {
       olsrLinkSetItem_t tmp = olsrLinkSet.setData[candidate];
+      DEBUG_PRINT_OLSR_LINK("now is :%ld,expire is :%ld\n",now,tmp.data.m_expirationTime);
       if(tmp.data.m_expirationTime < now)
         {
-          olsrDelNeighborByAddr(tmp.data.m_neighborAddr);
+          olsrDelNeighborByAddr(&olsrNeighborSet,tmp.data.m_neighborAddr);
           setIndex_t delItem = candidate;
           candidate = tmp.next;
-          olsrDelLinkTupleByPos(delItem);
+          olsrDelLinkTupleByPos(&olsrLinkSet,delItem);
           isChange = true;
           continue;
         }
@@ -1087,7 +1110,6 @@ bool olsrLinkTupleClearExpire() //
     {
       olsrNeighborLoss(expireSymVec, length);
     }
-  DEBUG_PRINT_OLSR_LINK("in clean link set finished\n");
   return isChange;
 }
 
@@ -1120,12 +1142,12 @@ bool olsrNbTwoHopTupleTimerExpire()
   while(candidate != -1)
     {
       olsrTwoHopNeighborSetItem_t tmp = olsrTwoHopNeighborSet.setData[candidate];
-      DEBUG_PRINT_OLSR_NEIGHBOR2("ex:%d,now:%d\n",tmp.data.m_expirationTime,now);
+      DEBUG_PRINT_OLSR_NEIGHBOR2("ex:%ld,now:%ld\n",tmp.data.m_expirationTime,now);
       if(tmp.data.m_expirationTime < now)
         {
           setIndex_t delItem = candidate;
           candidate = tmp.next;
-          olsrDelTwoHopNeighborTupleByPos(delItem);
+          olsrDelTwoHopNeighborTupleByPos(&olsrTwoHopNeighborSet,delItem);
           isChange = true;
           continue;
         }
@@ -1165,40 +1187,55 @@ void olsrHelloTask(void *ptr)
   {
       /* code */
       vTaskDelay(M2T(OLSR_HELLO_INTERVAL));
-      DEBUG_PRINT_OLSR_SEND("HELLO_INTERVAL\n");
-      xSemaphoreTake(olsrLinkSetLock,portMAX_DELAY);
-      xSemaphoreTake(olsrNeighborSetLock,portMAX_DELAY);
-      xSemaphoreTake(olsrTwoHopNeighborSetLock,portMAX_DELAY);
-      xSemaphoreTake(olsrMprSetLock,portMAX_DELAY);
-      xSemaphoreTake(olsrMprSelectorSetLock,portMAX_DELAY);
+      // DEBUG_PRINT_OLSR_HELLO("to take olsrLinkSetLock\n");
+      // xSemaphoreTake(olsrLinkSetLock,portMAX_DELAY);
+      // DEBUG_PRINT_OLSR_HELLO("got olsrLinkSetLock\n");
+      // DEBUG_PRINT_OLSR_HELLO("to take olsrNeighborSetLock\n");
+      // xSemaphoreTake(olsrNeighborSetLock,portMAX_DELAY);
+      // DEBUG_PRINT_OLSR_HELLO("got olsrNeighborSetLock\n");
+      // DEBUG_PRINT_OLSR_HELLO("to take olsrTwoHopNeighborSetLock\n");
+      // xSemaphoreTake(olsrTwoHopNeighborSetLock,portMAX_DELAY);
+      // DEBUG_PRINT_OLSR_HELLO("got olsrTwoHopNeighborSetLock\n");
+      // DEBUG_PRINT_OLSR_HELLO("to take olsrMprSetLock\n");
+      // xSemaphoreTake(olsrMprSetLock,portMAX_DELAY);
+      // DEBUG_PRINT_OLSR_HELLO("got olsrMprSetLock\n");
+      // DEBUG_PRINT_OLSR_HELLO("to take olsrMprSelectorSetLock\n");
+      // xSemaphoreTake(olsrMprSelectorSetLock,portMAX_DELAY);
+      // DEBUG_PRINT_OLSR_HELLO("got olsrMprSelectorSetLock\n");
+        DEBUG_PRINT_OLSR_HELLO("to take set lock in hello task\n");
+      xSemaphoreTake(olsrAllSetLock,portMAX_DELAY);
+        DEBUG_PRINT_OLSR_HELLO("got set lock in hello task\n");
       olsrLinkTupleClearExpire();
       olsrSendHello();
-      xSemaphoreGive(olsrMprSelectorSetLock);
-      xSemaphoreGive(olsrMprSetLock);
-      xSemaphoreGive(olsrTwoHopNeighborSetLock);
-      xSemaphoreGive(olsrNeighborSetLock);
-      xSemaphoreGive(olsrLinkSetLock);
+      xSemaphoreGive(olsrAllSetLock);
+      DEBUG_PRINT_OLSR_HELLO("free set lock in hello task\n");
+      // xSemaphoreGive(olsrMprSelectorSetLock);
+      // xSemaphoreGive(olsrMprSetLock);
+      // xSemaphoreGive(olsrTwoHopNeighborSetLock);
+      // xSemaphoreGive(olsrNeighborSetLock);
+      // xSemaphoreGive(olsrLinkSetLock);
   }
 }
 
-void olsrTcTask(void *ptr)
-{
-  DEBUG_PRINT_OLSR_SYSTEM("TC_SEND TO QUEUE\n");
-  while(true)
-  {
-    xSemaphoreTake(olsrMprSelectorSetLock,portMAX_DELAY);
-    if(!olsrMprSelectorSetIsEmpty())
-      {
-        olsrSendTc();
-      }
-    else
-      {
-        DEBUG_PRINT_OLSR_TC("Not sending any TC, no one selected me as MPR.\n");
-      }
-    xSemaphoreGive(olsrMprSelectorSetLock);
-    vTaskDelay(M2T(OLSR_TC_INTERVAL));
-  }
-}
+// void olsrTcTask(void *ptr)
+// {
+//   DEBUG_PRINT_OLSR_SYSTEM("TC_SEND TO QUEUE\n");
+//   while(true)
+//   {
+//     xSemaphoreTake(olsrMprSelectorSetLock,portMAX_DELAY);
+//     if(!olsrMprSelectorSetIsEmpty())
+//       {
+//         // olsrSendTc();
+//         DEBUG_PRINT_OLSR_TC("Send TC yes\n");
+//       }
+//     else
+//       {
+//         DEBUG_PRINT_OLSR_TC("Not sending any TC, no one selected me as MPR.\n");
+//       }
+//     xSemaphoreGive(olsrMprSelectorSetLock);
+//     vTaskDelay(M2T(OLSR_TC_INTERVAL));
+//   }
+// }
 
 void olsrDupTupleTimerExpireTask(void *ptr)
 {
@@ -1213,131 +1250,123 @@ void olsrDupTupleTimerExpireTask(void *ptr)
       vTaskDelay(M2T(OLSR_DUP_CLEAR_INTERVAL));
     }
 }
-void olsrLinkTupleTimerExpireTask(void *ptr)
-{
-  while(true)
-    {
-      xSemaphoreTake(olsrLinkSetLock,portMAX_DELAY);
-      if(olsrLinkTupleClearExpire())
-        {
-          DEBUG_PRINT_OLSR_LINK("has tuple be deleted\n");
-        }
-      xSemaphoreGive(olsrLinkSetLock);
-      vTaskDelay(M2T(OLSR_LINK_CLEAR_INTERVAL));
-    }
-}
-void olsrNbTwoHopTupleTimerExpireTask(void *ptr)
-{
-  while(true)
-    {
-      xSemaphoreTake(olsrTwoHopNeighborSetLock,portMAX_DELAY);
-      if(olsrNbTwoHopTupleTimerExpire())
-        {
-          DEBUG_PRINT_OLSR_DUPLICATE("has tuple be deleted\n");
-        }
-      xSemaphoreGive(olsrTwoHopNeighborSetLock);
-      vTaskDelay(M2T(OLSR_NEIGHBOR2HOP_CLEAR_INTERVAL));
-    }
-}
-void olsrMprSelectorTupleTimerExpireTask(void *ptr)
-{
-  while(true)
-    {
-      xSemaphoreTake(olsrMprSelectorSetLock,portMAX_DELAY);
-      if(olsrMprSelectorTupleTimerExpire())
-        {
-          DEBUG_PRINT_OLSR_DUPLICATE("has tuple be deleted\n");
-        }
-      xSemaphoreGive(olsrMprSelectorSetLock);
-      vTaskDelay(M2T(OLSR_MS_CLEAR_INTERVAL));
-    }
-}
-void olsrTopologyTupleTimerExpireTask(void *ptr)
-{
-  while(true)
-    {
-      xSemaphoreTake(olsrTopologySetLock,portMAX_DELAY);
-      if(olsrTopologyTupleTimerExpire())
-        {
-          DEBUG_PRINT_OLSR_DUPLICATE("has tuple be deleted\n");
-        }
-      xSemaphoreGive(olsrTopologySetLock);
-      vTaskDelay(M2T(OLSR_TOP_CLEAR_INTERVAL));
-    }
-}
 
-
-packet_t dwPacket = {0};
-bool hasMessageCache = false;
-olsrMessage_t olsrMessageCache = {0};
 void olsrSendTask(void *ptr)
 {
-    //pointer initialize 
+    bool hasOlsrMessageCache =false;
+		TickType_t timeToWaitForSendQueue;
+    olsrMessage_t olsrMessageCache = {0};
+    packet_t txPacket = {0};
+  	MAC80215_PACKET_INIT(txPacket, MAC802154_TYPE_OLSR);
+    dwm = (dwDevice_t *)ptr;
+    olsrPacket_t *olsrPacket = (olsrPacket_t*)txPacket.payload;
     //task loop
-  memset(&olsrMessageCache,0,sizeof(olsrMessage_t));
-  while(true)
-    { 
-      memset(&dwPacket,0,sizeof(packet_t));
-      MAC80215_PACKET_INIT(dwPacket, MAC802154_TYPE_OLSR);
-      olsrPacket_t *olsrPacket = (olsrPacket_t *)dwPacket.payload;
-      olsrMessage_t *messages = (olsrMessage_t *)(olsrPacket->m_packetPayload);
-      uint8_t *writePosition = (uint8_t *)messages;
-      if(hasMessageCache)
-        {
-            configASSERT(olsrMessageCache.m_messageHeader.m_messageSize <= MESSAGE_MAX_LENGTH);
-            memcpy(writePosition,&olsrMessageCache,olsrMessageCache.m_messageHeader.m_messageSize);
-            writePosition += olsrMessageCache.m_messageHeader.m_messageSize;
-            hasMessageCache = false;
-        }
-      while(xQueueReceive(g_olsrSendQueue, &olsrMessageCache, 700))
-        {
-          configASSERT(olsrMessageCache.m_messageHeader.m_messageSize <= MESSAGE_MAX_LENGTH);
-          if(0==olsrMessageCache.m_messageHeader.m_timeToLive) break;
-          if(writePosition+olsrMessageCache.m_messageHeader.m_messageSize-(uint8_t *)messages>MESSAGE_MAX_LENGTH)
-            {
-              hasMessageCache = true;
-              DEBUG_PRINT_OLSR_SEND("break\n");
-              break;
-            }
-          else
-            {
-              memcpy(writePosition,&olsrMessageCache,olsrMessageCache.m_messageHeader.m_messageSize);
-              writePosition += (uint8_t)olsrMessageCache.m_messageHeader.m_messageSize;
-            }
-        }
-      if(writePosition-(uint8_t *)olsrPacket==sizeof(olsrPacketHeader_t))
-        {
-          DEBUG_PRINT_OLSR_SEND("continue!!\n");
-          vTaskDelay(200);
+    while(true){
+
+      uint8_t *writePosition = olsrPacket->m_packetPayload;
+		  timeToWaitForSendQueue = portMAX_DELAY;
+      while(hasOlsrMessageCache || xQueueReceive(g_olsrSendQueue, &olsrMessageCache, timeToWaitForSendQueue)){
+				timeToWaitForSendQueue = 0;
+        hasOlsrMessageCache = false;
+        configASSERT(olsrMessageCache.m_messageHeader.m_messageSize <= MESSAGE_MAX_LENGTH);
+        if(olsrMessageCache.m_messageHeader.m_messageType!=TS_MESSAGE && 0==olsrMessageCache.m_messageHeader.m_timeToLive) 
           continue;
+        if((writePosition-olsrPacket->m_packetPayload)+olsrMessageCache.m_messageHeader.m_messageSize>MESSAGE_MAX_LENGTH){
+          hasOlsrMessageCache = true;
+          break;
         }
-      olsrPacket->m_packetHeader.m_packetLength = (uint16_t)(writePosition-(uint8_t *)olsrPacket);
-          // olsrPacket_t *p = (olsrPacket_t *)dwPacket.payload;
-          // olsrMessage_t *q = (olsrMessage_t *)p->m_packetPayload;
-          // olsrHelloMessage_t *k = (olsrHelloMessage_t *)q->m_messagePayload;
-          // DEBUG_PRINT_OLSR_SEND("last send legth %d\n",p->m_packetHeader.m_packetLength);
-          // DEBUG_PRINT_OLSR_SEND("last send message length %d\n",q->m_messageHeader.m_messageSize);
-          // DEBUG_PRINT_OLSR_SEND("last send HelloMsg usd leth %d\n",k->m_helloHeader.m_linkMessageNumber);
-          //transmit
-      DEBUG_PRINT_OLSR_SEND("when SEND\n");
-      // olsrPrintHelloPacket(&dwPacket);
+        memcpy(writePosition,&olsrMessageCache,olsrMessageCache.m_messageHeader.m_messageSize);
+        writePosition += olsrMessageCache.m_messageHeader.m_messageSize;
+				if(olsrMessageCache.m_messageHeader.m_messageType==TS_MESSAGE) 
+						txPacket.fcf_s.reserved = 1;
+				DEBUG_PRINT_OLSR_SEND("MsgInC:%d,type:%d,size:%d,seq:%d\n", hasOlsrMessageCache, olsrMessageCache.m_messageHeader.m_messageType, olsrMessageCache.m_messageHeader.m_messageSize, olsrMessageCache.m_messageHeader.m_messageSeq);
+      }
+      ASSERT(writePosition-(uint8_t *)olsrPacket>sizeof(olsrPacketHeader_t));
+      olsrPacket->m_packetHeader.m_packetLength = writePosition-(uint8_t *)olsrPacket;
+      olsrPacket->m_packetHeader.m_packetSeq = getSeqNumber();
+      //transmit
       dwNewTransmit(dwm);
       dwSetDefaults(dwm);
       dwWaitForResponse(dwm, true);
       dwReceivePermanently(dwm, true);
-      dwSetData(dwm, (uint8_t *)&dwPacket,MAC802154_HEADER_LENGTH+olsrPacket->m_packetHeader.m_packetLength);
+      dwSetData(dwm, (uint8_t *)&txPacket,MAC802154_HEADER_LENGTH+olsrPacket->m_packetHeader.m_packetLength);
       dwStartTransmit(dwm);
-      vTaskDelay(2000);
+      DEBUG_PRINT_OLSR_SEND("PktSend!Len:%d\n",MAC802154_HEADER_LENGTH+olsrPacket->m_packetHeader.m_packetLength);
     }
 }
+// packet_t dwPacket = {0};
+// bool hasMessageCache = false;
+// olsrMessage_t olsrMessageCache = {0};
+// void olsrSendTask(void *ptr)
+// {
+//     //pointer initialize 
+//     //task loop
+//   memset(&olsrMessageCache,0,sizeof(olsrMessage_t));
+//   while(true)
+//     { 
+//       memset(&dwPacket,0,sizeof(packet_t));
+//       MAC80215_PACKET_INIT(dwPacket, MAC802154_TYPE_OLSR);
+//       olsrPacket_t *olsrPacket = (olsrPacket_t *)dwPacket.payload;
+//       olsrMessage_t *messages = (olsrMessage_t *)(olsrPacket->m_packetPayload);
+//       uint8_t *writePosition = (uint8_t *)messages;
+//       if(hasMessageCache)
+//         {
+//             configASSERT(olsrMessageCache.m_messageHeader.m_messageSize <= MESSAGE_MAX_LENGTH);
+//             memcpy(writePosition,&olsrMessageCache,olsrMessageCache.m_messageHeader.m_messageSize);
+//             writePosition += olsrMessageCache.m_messageHeader.m_messageSize;
+//             hasMessageCache = false;
+//         }
+//       while(xQueueReceive(g_olsrSendQueue, &olsrMessageCache, 0))
+//         {
+//           configASSERT(olsrMessageCache.m_messageHeader.m_messageSize <= MESSAGE_MAX_LENGTH);
+//           if(0==olsrMessageCache.m_messageHeader.m_timeToLive) break;
+//           if(writePosition+olsrMessageCache.m_messageHeader.m_messageSize-(uint8_t *)messages>MESSAGE_MAX_LENGTH)
+//             {
+//               hasMessageCache = true;
+//               DEBUG_PRINT_OLSR_SEND("break\n");
+//               break;
+//             }
+//           else
+//             {
+//               memcpy(writePosition,&olsrMessageCache,olsrMessageCache.m_messageHeader.m_messageSize);
+//               writePosition += (uint8_t)olsrMessageCache.m_messageHeader.m_messageSize;
+//             }
+//         }
+//       if(writePosition-(uint8_t *)olsrPacket==sizeof(olsrPacketHeader_t))
+//         {
+//           vTaskDelay(200);
+//           continue;
+//         }
+//       olsrPacket->m_packetHeader.m_packetLength = (uint16_t)(writePosition-(uint8_t *)olsrPacket);
+//           // olsrPacket_t *p = (olsrPacket_t *)dwPacket.payload;
+//           // olsrMessage_t *q = (olsrMessage_t *)p->m_packetPayload;
+//           // olsrHelloMessage_t *k = (olsrHelloMessage_t *)q->m_messagePayload;
+//           // DEBUG_PRINT_OLSR_SEND("last send legth %d\n",p->m_packetHeader.m_packetLength);
+//           // DEBUG_PRINT_OLSR_SEND("last send message length %d\n",q->m_messageHeader.m_messageSize);
+//           // DEBUG_PRINT_OLSR_SEND("last send HelloMsg usd leth %d\n",k->m_helloHeader.m_linkMessageNumber);
+//           //transmit
+//       DEBUG_PRINT_OLSR_SEND("when SEND\n");
+//       olsrPrintPacket(&dwPacket);
+//       dwNewTransmit(dwm);
+//       dwSetDefaults(dwm);
+//       dwWaitForResponse(dwm, true);
+//       dwReceivePermanently(dwm, true);
+//       dwSetData(dwm, (uint8_t *)&dwPacket,MAC802154_HEADER_LENGTH+olsrPacket->m_packetHeader.m_packetLength);
+//       dwStartTransmit(dwm);
+//       vTaskDelay(200);
+//       DEBUG_PRINT_OLSR_SEND("send successful\n");
+//     }
+// }
 void olsrRecvTask(void *ptr){
     DEBUG_PRINT_OLSR_RECEIVE("RECV TASK START\n");
     packet_t recvPacket;
     while(true){
-      while(xQueueReceive(g_olsrRecvQueue,&recvPacket,0)){
-        olsrPacketDispatch(&recvPacket);
-        olsr_routing_table_compute();
-      }
-      vTaskDelay(1000);
+        DEBUG_PRINT_OLSR_RECEIVE("to take a packet from q\n");
+        if (xQueueReceive(g_olsrRecvQueue,&recvPacket,0)==pdTRUE)
+          {
+            DEBUG_PRINT_OLSR_RECEIVE("got a packet from q\n");
+            olsrPacketDispatch(&recvPacket);
+          }
+        vTaskDelay(500);
     }
 }
