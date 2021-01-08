@@ -127,7 +127,6 @@ void olsrRxCallback(dwDevice_t *dev){
     DEBUG_PRINT_OLSR_RECEIVE("src: %X%X%X\n", u64>>32, u64, u64);
     #endif
     xQueueSend(g_olsrRecvQueue,&rxPacket,portMAX_DELAY);
-    DEBUG_PRINT_OLSR_SYSTEM("leave from rxcallback\n");
 }
 //routing table compute
 void olsr_routing_table_compute(){
@@ -494,10 +493,6 @@ void mprCompute()
 
       itForTwoHopNeighborSet = twoHopNTuple.next;
     }
-  DEBUG_PRINT_OLSR_MPR("IN MPR COMPUTE****:\n");
-  olsrPrintNeighborSet(&N);
-  olsrPrintTwoHopNeighborSet(&N2);
-  DEBUG_PRINT_OLSR_MPR("************\n");
   olsrAddr_t coveredTwoHopNeighbors[TWO_HOP_NEIGHBOR_SET_SIZE];
   for(int i =0;i<TWO_HOP_NEIGHBOR_SET_SIZE;i++)
     {
@@ -507,8 +502,6 @@ void mprCompute()
     //find the unique pair of two hop neighborN2
   setIndex_t n2It = N2.fullQueueEntry;
    //A-B-C  A-Q-C  A-E-F 
-   DEBUG_PRINT_OLSR_MPR("mid\n");
-  DEBUG_PRINT_OLSR_MPR("n2It is %d\n",n2It);
   while(n2It != -1)
     {
       bool onlyOne = true;
@@ -524,7 +517,7 @@ void mprCompute()
         }
       if(onlyOne&&!olsrFindMprByAddr(&olsrMprSet, N2.setData[n2It].data.m_neighborAddr))//TODO if 
         {
-          DEBUG_PRINT_OLSR_MPR("this addr:% is matched a isolatied node in two hop\n",N2.setData[n2It].data.m_neighborAddr);
+          // DEBUG_PRINT_OLSR_MPR("this addr:% is matched a isolatied node in two hop\n",N2.setData[n2It].data.m_neighborAddr);
           olsrMprTuple_t item;
           item.m_addr = N2.setData[n2It].data.m_neighborAddr;
           olsrInsertToMprSet(&olsrMprSet,&item);
@@ -544,7 +537,6 @@ void mprCompute()
 
   // //erase 
   DEBUG_PRINT_OLSR_MPR("lenthOfCoveredTwoHopNeighbor is %d\n",lenthOfCoveredTwoHopNeighbor);
-  vTaskDelay(1000);
   setIndex_t itForEraseFromN2 = N2.fullQueueEntry;
   while(itForEraseFromN2 != -1)
     {
@@ -565,10 +557,8 @@ void mprCompute()
         }
       itForEraseFromN2 = N2.setData[itForEraseFromN2].next;
     } //TODO 有一些冗余
-  int count = 0;
-  while(N2.fullQueueEntry != -1&&count<10) //N N2 A-B-C A-Q-C A-G-
+  while(N2.fullQueueEntry != -1) //N N2 A-B-C A-Q-C A-G-
     {
-      count++;
       DEBUG_PRINT_OLSR_NEIGHBOR2("in mpr cmpute !!!\n");
       olsrPrintTwoHopNeighborSet(&N2);
       int maxR = 0;
@@ -633,21 +623,17 @@ void olsrProcessHello(const olsrMessage_t* helloMsg)
   // xSemaphoreTake(olsrTwoHopNeighborSetLock,portMAX_DELAY);
   // xSemaphoreTake(olsrMprSetLock,portMAX_DELAY);
   // xSemaphoreTake(olsrMprSelectorSetLock,portMAX_DELAY);
-  DEBUG_PRINT_OLSR_HELLO("to take set lock in process hello\n");
   xSemaphoreTake(olsrAllSetLock,portMAX_DELAY);
-  DEBUG_PRINT_OLSR_HELLO("got set lock in process hello\n");
   olsrLinkTupleClearExpire();//
   olsrNbTwoHopTupleTimerExpire();
   olsrMprSelectorTupleTimerExpire();
   linkSensing(helloMsg);
   populateNeighborSet(helloMsg);
   populateTwoHopNeighborSet(helloMsg); 
-  DEBUG_PRINT_OLSR_HELLO("to compute mpr\n");
   mprCompute();
   populateMprSelectorSet(helloMsg);
   olsrPrintAll();
   xSemaphoreGive(olsrAllSetLock);
-  DEBUG_PRINT_OLSR_HELLO("free set lock in process hello\n");
 
   // xSemaphoreGive(olsrMprSelectorSetLock);
   // xSemaphoreGive(olsrMprSetLock);
@@ -743,7 +729,6 @@ void olsrPrintPacket(const packet_t* rxPacket)
   DEBUG_PRINT_OLSR_HELLO("packet Length: %d\n",lengthPacket);
   void* olsrMessage = (void *)olsrPacket->m_packetPayload;
   unsigned int index = 4;
-  return;
   //TODO 一个packet里有俩个helloMessage
   while(index < lengthPacket)
   {
@@ -860,8 +845,6 @@ void olsrRoutingTableComputation()
 void olsrPacketDispatch(const packet_t* rxPacket)
 {
   DEBUG_PRINT_OLSR_HELLO("PACKET_DISPATCH\n");  
-  olsrPrintPacket(rxPacket);
-  // olsrPrintHelloPacket(rxPacket);
   //need to add a condition whether recvive a packet from self
   olsrPacket_t* olsrPacket = (olsrPacket_t* )rxPacket->payload;
   int lengthOfPacket = olsrPacket->m_packetHeader.m_packetLength;
@@ -913,7 +896,7 @@ void olsrPacketDispatch(const packet_t* rxPacket)
         {
           doForward = false;
         }
-      xSemaphoreGive(olsrDuplicateSetLock);
+
       // if(doForward)
       //   {
       //     if(olsrMessage->m_messageHeader.m_messageType != HELLO_MESSAGE)
@@ -1018,19 +1001,15 @@ void olsrSendHello()
         linkMessage.m_linkCode = (linkType & 0x03) | ((nbType << 2) & 0x0f);
         linkMessage.m_addressUsedSize = 1;
         linkMessage.m_addresses = olsrLinkSet.setData[linkTupleIndex].data.m_neighborAddr;
-        DEBUG_PRINT_OLSR_HELLO("link message max num: %d\n",LINK_MESSAGE_MAX_NUM);//ADD
         if(helloMessage.m_helloHeader.m_linkMessageNumber==LINK_MESSAGE_MAX_NUM) break;
         helloMessage.m_linkMessage[helloMessage.m_helloHeader.m_linkMessageNumber++] = linkMessage;
         linkTupleIndex = olsrLinkSet.setData[linkTupleIndex].next;
-        DEBUG_PRINT_OLSR_HELLO("in function sendHello NextIndex=:%d",linkTupleIndex);
     }
   uint16_t writeSize = sizeof(olsrHelloMessageHeader_t)+helloMessage.m_helloHeader.m_linkMessageNumber*\
                        sizeof(olsrLinkMessage_t);
   msg.m_messageHeader.m_messageSize +=  writeSize;                 
   memcpy(msg.m_messagePayload,&helloMessage,writeSize);
-  DEBUG_PRINT_OLSR_HELLO("send a message with length:%d\n",msg.m_messageHeader.m_messageSize);
   xQueueSend(g_olsrSendQueue,&msg,portMAX_DELAY);
-  DEBUG_PRINT_OLSR_HELLO("send to send q successful\n");
 }
 
 
@@ -1202,13 +1181,13 @@ void olsrHelloTask(void *ptr)
       // DEBUG_PRINT_OLSR_HELLO("to take olsrMprSelectorSetLock\n");
       // xSemaphoreTake(olsrMprSelectorSetLock,portMAX_DELAY);
       // DEBUG_PRINT_OLSR_HELLO("got olsrMprSelectorSetLock\n");
-        DEBUG_PRINT_OLSR_HELLO("to take set lock in hello task\n");
+        // DEBUG_PRINT_OLSR_HELLO("to take set lock in hello task\n");
       xSemaphoreTake(olsrAllSetLock,portMAX_DELAY);
-        DEBUG_PRINT_OLSR_HELLO("got set lock in hello task\n");
+        // DEBUG_PRINT_OLSR_HELLO("got set lock in hello task\n");
       olsrLinkTupleClearExpire();
       olsrSendHello();
       xSemaphoreGive(olsrAllSetLock);
-      DEBUG_PRINT_OLSR_HELLO("free set lock in hello task\n");
+      // DEBUG_PRINT_OLSR_HELLO("free set lock in hello task\n");
       // xSemaphoreGive(olsrMprSelectorSetLock);
       // xSemaphoreGive(olsrMprSetLock);
       // xSemaphoreGive(olsrTwoHopNeighborSetLock);
@@ -1217,25 +1196,25 @@ void olsrHelloTask(void *ptr)
   }
 }
 
-// void olsrTcTask(void *ptr)
-// {
-//   DEBUG_PRINT_OLSR_SYSTEM("TC_SEND TO QUEUE\n");
-//   while(true)
-//   {
-//     xSemaphoreTake(olsrMprSelectorSetLock,portMAX_DELAY);
-//     if(!olsrMprSelectorSetIsEmpty())
-//       {
-//         // olsrSendTc();
-//         DEBUG_PRINT_OLSR_TC("Send TC yes\n");
-//       }
-//     else
-//       {
-//         DEBUG_PRINT_OLSR_TC("Not sending any TC, no one selected me as MPR.\n");
-//       }
-//     xSemaphoreGive(olsrMprSelectorSetLock);
-//     vTaskDelay(M2T(OLSR_TC_INTERVAL));
-//   }
-// }
+void olsrTcTask(void *ptr)
+{
+  DEBUG_PRINT_OLSR_SYSTEM("TC_SEND TO QUEUE\n");
+  while(true)
+  {
+    xSemaphoreTake(olsrMprSelectorSetLock,portMAX_DELAY);
+    if(!olsrMprSelectorSetIsEmpty())
+      {
+        // olsrSendTc();
+        DEBUG_PRINT_OLSR_TC("Send TC yes\n");
+      }
+    else
+      {
+        DEBUG_PRINT_OLSR_TC("Not sending any TC, no one selected me as MPR.\n");
+      }
+    xSemaphoreGive(olsrMprSelectorSetLock);
+    vTaskDelay(M2T(OLSR_TC_INTERVAL));
+  }
+}
 
 void olsrDupTupleTimerExpireTask(void *ptr)
 {
@@ -1251,6 +1230,31 @@ void olsrDupTupleTimerExpireTask(void *ptr)
     }
 }
 
+// void olsrSendTask(void *ptr)
+// {
+//   packet_t txPacket = {0};
+//   MAC80215_PACKET_INIT(txPacket, MAC802154_TYPE_OLSR);
+//   dwm = (dwDevice_t *)ptr;
+//   olsrPacket_t olsrPacket = {0};
+//   olsrMessage_t olsrMessageCache = {0};
+//   while(true)
+//     {
+//       if(xQueueReceive(g_olsrSendQueue, &olsrMessageCache, 0)==pdTRUE)
+//         {
+//           olsrPacket.m_packetHeader.m_packetLength = sizeof(olsrPacket.m_packetHeader)+olsrMessageCache.m_messageHeader.m_messageSize;
+//           memcpy(&olsrPacket.m_packetPayload,&olsrMessageCache,sizeof(olsrMessageCache));
+//           memcpy(&txPacket.payload,&olsrPacket,sizeof(olsrPacket));
+//       //transmit
+//           dwNewTransmit(dwm);
+//           dwSetDefaults(dwm);
+//           dwWaitForResponse(dwm, true);
+//           dwReceivePermanently(dwm, true);
+//           dwSetData(dwm, (uint8_t *)&txPacket,MAC802154_HEADER_LENGTH+olsrPacket.m_packetHeader.m_packetLength);
+//           dwStartTransmit(dwm);
+//         }
+//       vTaskDelay(500);
+//     }
+// }
 void olsrSendTask(void *ptr)
 {
     bool hasOlsrMessageCache =false;
@@ -1262,7 +1266,6 @@ void olsrSendTask(void *ptr)
     olsrPacket_t *olsrPacket = (olsrPacket_t*)txPacket.payload;
     //task loop
     while(true){
-
       uint8_t *writePosition = olsrPacket->m_packetPayload;
 		  timeToWaitForSendQueue = portMAX_DELAY;
       while(hasOlsrMessageCache || xQueueReceive(g_olsrSendQueue, &olsrMessageCache, timeToWaitForSendQueue)){
@@ -1361,12 +1364,12 @@ void olsrRecvTask(void *ptr){
     DEBUG_PRINT_OLSR_RECEIVE("RECV TASK START\n");
     packet_t recvPacket;
     while(true){
-        DEBUG_PRINT_OLSR_RECEIVE("to take a packet from q\n");
+        // DEBUG_PRINT_OLSR_RECEIVE("to take a packet from q\n");
         if (xQueueReceive(g_olsrRecvQueue,&recvPacket,0)==pdTRUE)
           {
-            DEBUG_PRINT_OLSR_RECEIVE("got a packet from q\n");
+            // DEBUG_PRINT_OLSR_RECEIVE("got a packet from q\n");
             olsrPacketDispatch(&recvPacket);
           }
-        vTaskDelay(500);
+        vTaskDelay(50);
     }
 }
