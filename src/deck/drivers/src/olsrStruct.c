@@ -806,11 +806,12 @@ bool olsrEraseMprSelectorTuples(olsrMprSelectorSet_t *mprSelectorSet, olsrAddr_t
       olsrMprSelectorSetItem_t tmp = mprSelectorSet->setData[candidate];
       if(tmp.data.m_addr == addr)
         {
-          if(olsrMprSelectorSetFree(&olsrMprSelectorSet,candidate))
+          if(olsrMprSelectorSetFree(mprSelectorSet,candidate))
             {
               return true;
             }
         }
+      candidate = tmp.next; 
     }
   return false;
 }
