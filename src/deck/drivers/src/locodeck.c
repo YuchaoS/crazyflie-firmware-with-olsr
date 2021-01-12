@@ -123,7 +123,7 @@ struct {
 static uwbAlgorithm_t *algorithm = &uwbTdoa2TagAlgorithm;
 #elif LPS_TDOA3_ENABLE
 static uwbAlgorithm_t *algorithm = &uwbTdoa3TagAlgorithm;
-#elif LPS_OLDR_ENABLE
+#elif LPS_OLSR_ENABLE
 static uwbAlgorithm_t *algorithm = &uwbOLSRAlgorithm;
 #else
 static uwbAlgorithm_t *algorithm = &uwbTwrTagAlgorithm;
