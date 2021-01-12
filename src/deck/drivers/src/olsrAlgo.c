@@ -155,7 +155,7 @@ static uint16_t getAnsn()
   return retVal;
 }
 
-static void addNeighborTuple(olsrNeighborSet_t& neighborSet const olsrNeighborTuple_t* tuple)
+static void addNeighborTuple(olsrNeighborSet_t* neighborSet ,const olsrNeighborTuple_t* tuple)
 {
   olsrInsertToNeighborSet(neighborSet,tuple);
   incrementAnsn();
@@ -177,7 +177,7 @@ static void addMprSelectorTuple(const olsrMprSelectorTuple_t * tuple)
   incrementAnsn();
 }
 
-static void addTopologyTuple(olsrTopologySet_t& topologySet const olsrTopologyTuple_t *tuple)
+static void addTopologyTuple(olsrTopologySet_t* topologySet ,const olsrTopologyTuple_t *tuple)
 {
   olsrInsertToTopologySet(topologySet,tuple);
 }
@@ -837,7 +837,7 @@ void olsrPacketDispatch(const packet_t* rxPacket)
   int lengthOfPacket = olsrPacket->m_packetHeader.m_packetLength;
   int index = sizeof(olsrPacket->m_packetHeader);
   void *message = (void *)olsrPacket->m_packetPayload;
-  xSemaphoreTake(olsrAllSetLock,portMAX_DELEY);
+  xSemaphoreTake(olsrAllSetLock,portMAX_DELAY);
   olsrSetExpire();
   while(index<lengthOfPacket)
     {
@@ -1170,7 +1170,7 @@ void olsrTcTask(void *ptr)
     xSemaphoreTake(olsrAllSetLock,portMAX_DELAY);
     if(!olsrMprSelectorSetIsEmpty())
       {
-        olsrSendTc();
+        // olsrSendTc();
         DEBUG_PRINT_OLSR_TC("Send TC yes\n");
       }
     else
