@@ -21,7 +21,7 @@
 
 static void olsrTopologySetInit(olsrTopologySet_t *topologySet)
 {
-  int i;
+  setIndex_t i;
   for(i=0; i < TOPOLOGY_SET_SIZE-1; i++)
     {
       topologySet->setData[i].next = i+1;
@@ -172,7 +172,7 @@ void olsrPrintTopologySet(olsrTopologySet_t *topologyset)
 
 static void olsrLinkSetInit(olsrLinkSet_t *linkSet)
 {
-  int i;
+  setIndex_t i;
   for(i=0; i < LINK_SET_SIZE-1; i++)
     {
       linkSet->setData[i].next = i+1;
@@ -316,7 +316,7 @@ setIndex_t olsrFindSymLinkTuple(olsrLinkSet_t *linkSet,olsrAddr_t sender,olsrTim
 
 void olsrNeighborSetInit(olsrNeighborSet_t *neighborSet)
 {
-  int i;
+  setIndex_t i;
   for(i=0; i < NEIGHBOR_SET_SIZE-1; i++)
     {
       neighborSet->setData[i].next = i+1;
@@ -450,7 +450,7 @@ void olsrPrintNeighborSet(olsrNeighborSet_t *neighborSet)
 
 void olsrTwoHopNeighborSetInit(olsrTwoHopNeighborSet_t *twoHopNeighborSet)
 {
-  int i;
+  setIndex_t i;
   for(i=0; i < TWO_HOP_NEIGHBOR_SET_SIZE-1; i++)
     {
       twoHopNeighborSet->setData[i].next = i+1;
@@ -629,7 +629,7 @@ void olsrPrintTwoHopNeighborSet(olsrTwoHopNeighborSet_t *twoHopNeighborSet)
 
 void olsrMprSetInit(olsrMprSet_t *mprSet)
 {
-  int i;
+  setIndex_t i;
   for(i=0; i < MPR_SET_SIZE-1; i++)
     {
       mprSet->setData[i].next = i+1;
@@ -706,7 +706,7 @@ void olsrPrintMprSet(olsrMprSet_t *mprSet)
 */
 void olsrMprSelectorSetInit(olsrMprSelectorSet_t *mprSelectorSet)
 {
-  int i;
+  setIndex_t i;
   for(i=0; i < MPR_SELECTOR_SET_SIZE-1; i++)
     {
       mprSelectorSet->setData[i].next = i+1;
@@ -839,7 +839,7 @@ void olsrPrintMprSelectorSet(olsrMprSelectorSet_t *mprSelectorSet)
 
 void olsrDuplicateSetInit(olsrDuplicateSet_t *duplicateSet)
 {
-  int i;
+  setIndex_t i;
   for(i=0; i < DUPLICATE_SET_SIZE-1; i++)
     {
       duplicateSet->setData[i].next = i+1;
@@ -967,7 +967,7 @@ void olsrPrintDuplicateSet(olsrDuplicateSet_t *duplicateSet)
 
 void olsrRoutingSetInit(olsrRoutingSet_t *routingSet)
 {
-  int i;
+  setIndex_t i;
   for(i=0; i < DUPLICATE_SET_SIZE-1; i++)
     {
       routingSet->setData[i].next = i+1;
