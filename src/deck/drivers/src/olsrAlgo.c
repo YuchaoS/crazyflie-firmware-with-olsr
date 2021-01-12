@@ -631,8 +631,9 @@ void olsrProcessHello(const olsrMessage_t* helloMsg)
 //
 void olsrProcessTc(const olsrMessage_t* tcMsg)
 {
-  
+  olsrPrintLinkSet(&olsrLinkSet);
   olsrTime_t now = xTaskGetTickCount();
+  DEBUG_PRINT_OLSR_TC("now:%d\n",now);
   olsrAddr_t originator = tcMsg->m_messageHeader.m_originatorAddress;
   olsrAddr_t sender = tcMsg->m_messageHeader.m_relayAddress;
   olsrTopologyMessage_t* tcBody = (olsrTopologyMessage_t *)tcMsg->m_messagePayload;
@@ -647,6 +648,7 @@ void olsrProcessTc(const olsrMessage_t* tcMsg)
   setIndex_t topologyTupleIndex = olsrFindNewerTopologyTuple(&olsrTopologySet,originator,ansn);
   if(topologyTupleIndex != -1)
     {
+      DEBUG_PRINT_OLSR_TC("not newes one\n");
       return;
     }
   olsrEraseOlderTopologyTuples(&olsrTopologySet,originator,ansn);
@@ -655,6 +657,7 @@ void olsrProcessTc(const olsrMessage_t* tcMsg)
   for(int i = 0;i < count ;i++)
     {
       olsrAddr_t destAddr =  tcBody->m_content[i].m_address;
+      DEBUG_PRINT_OLSR_TC("destAddr:%d\n",tcBody->m_content[i].m_address);
       setIndex_t topologyIt = olsrFindTopologyTuple(&olsrTopologySet,destAddr,originator);
       if(topologyIt != -1)
         {
@@ -837,6 +840,7 @@ void olsrPacketDispatch(const packet_t* rxPacket)
   int lengthOfPacket = olsrPacket->m_packetHeader.m_packetLength;
   int index = sizeof(olsrPacket->m_packetHeader);
   void *message = (void *)olsrPacket->m_packetPayload;
+
   xSemaphoreTake(olsrAllSetLock,portMAX_DELAY);
   olsrSetExpire();
   while(index<lengthOfPacket)
@@ -862,12 +866,7 @@ void olsrPacketDispatch(const packet_t* rxPacket)
                 break;
             case TC_MESSAGE:
                 DEBUG_PRINT_OLSR_RECEIVE("recv a TC\n");
-                // xSemaphoreTake(olsrLinkSetLock,portMAX_DELAY);
-                // xSemaphoreTake(olsrTopologySetLock,portMAX_DELAY);
                 olsrProcessTc((olsrMessage_t*)message);
-                // xSemaphoreGive(olsrTopologySetLock);
-                // xSemaphoreGive(olsrLinkSetLock);
-                // olsr_tc_forward(olsr_message);
                 break;
             case DATA_MESSAGE:
                 DEBUG_PRINT_OLSR_RECEIVE("DATA_MESSAGE\n");
@@ -1011,7 +1010,7 @@ void olsrSendTc()
   msg.m_messageHeader.m_messageSize = sizeof(olsrMessageHeader_t);
   msg.m_messageHeader.m_originatorAddress = myAddress;
   msg.m_messageHeader.m_destinationAddress = 0;
-  msg.m_messageHeader.m_relayAddress = 0;  
+  msg.m_messageHeader.m_relayAddress = myAddress;  
   msg.m_messageHeader.m_timeToLive = 0xff;
   msg.m_messageHeader.m_hopCount = 0;
   msg.m_messageHeader.m_messageSeq = getSeqNumber();
@@ -1021,7 +1020,7 @@ void olsrSendTc()
   
   setIndex_t mprSelectorIt = olsrMprSelectorSet.fullQueueEntry;
   uint8_t pos = 0;
-  while(mprSelectorIt != -1)
+  while(mprSelectorIt != -1 && pos<TC_PAYLOAD_MAX_NUM)
     {
       olsrMprSelectorSetItem_t tmp = olsrMprSelectorSet.setData[mprSelectorIt];
       tcMsg.m_content[pos].m_address = tmp.data.m_addr;
@@ -1170,7 +1169,7 @@ void olsrTcTask(void *ptr)
     xSemaphoreTake(olsrAllSetLock,portMAX_DELAY);
     if(!olsrMprSelectorSetIsEmpty())
       {
-        // olsrSendTc();
+        olsrSendTc();
         DEBUG_PRINT_OLSR_TC("Send TC yes\n");
       }
     else

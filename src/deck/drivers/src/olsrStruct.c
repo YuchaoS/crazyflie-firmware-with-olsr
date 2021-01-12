@@ -288,7 +288,7 @@ void olsrPrintLinkSet(olsrLinkSet_t *linkSet)
   while(it != -1)
     {
       olsrLinkSetItem_t tmp = linkSet->setData[it];
-      DEBUG_PRINT_OLSR_LINK("linkSet: localAddr is %d, neighborAddr is %d ,\n",tmp.data.m_localAddr,tmp.data.m_neighborAddr);
+      DEBUG_PRINT_OLSR_LINK("linkSet: localAddr is %d, neighborAddr is %d ,symtime is %d\n",tmp.data.m_localAddr,tmp.data.m_neighborAddr,tmp.data.m_symTime);
       it = tmp.next;
     }
 }
@@ -296,6 +296,7 @@ void olsrPrintLinkSet(olsrLinkSet_t *linkSet)
 setIndex_t olsrFindSymLinkTuple(olsrLinkSet_t *linkSet,olsrAddr_t sender,olsrTime_t now)
 {
   setIndex_t candidate = linkSet->fullQueueEntry;
+  DEBUG_PRINT_OLSR_TC("sender is :%d,now is %d\n",sender,now);
   while(candidate != -1)
     {
       olsrLinkSetItem_t tmp = linkSet->setData[candidate];
