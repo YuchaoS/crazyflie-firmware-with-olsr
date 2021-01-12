@@ -303,6 +303,7 @@ setIndex_t olsrFindSymLinkTuple(olsrLinkSet_t *linkSet,olsrAddr_t sender,olsrTim
         {
           break;
         }
+      candidate = tmp.next;
     }
   return candidate;
 }
@@ -816,9 +817,9 @@ bool olsrEraseMprSelectorTuples(olsrMprSelectorSet_t *mprSelectorSet, olsrAddr_t
   return false;
 }
 
-void olsrDelMprSelectorTupleByPos(setIndex_t pos)
+void olsrDelMprSelectorTupleByPos(olsrMprSelectorSet_t *mprSelectorSet,setIndex_t pos)
 {
-  olsrMprSelectorSetFree(&olsrMprSelectorSet, pos);
+  olsrMprSelectorSetFree(mprSelectorSet, pos);
 }
 
 void olsrPrintMprSelectorSet(olsrMprSelectorSet_t *mprSelectorSet)

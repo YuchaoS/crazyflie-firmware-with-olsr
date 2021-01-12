@@ -34,7 +34,7 @@ static void olsrHelloTaskInit()
   else
     {
       DEBUG_PRINT_OLSR_SYSTEM("HELLO TASK CREATE FAILD\n");
-    };
+    }
 }
 static void olsrTcTaskInit() //TODO:修改stacksize
 {
@@ -46,7 +46,7 @@ static void olsrTcTaskInit() //TODO:修改stacksize
   else
     {
       DEBUG_PRINT_OLSR_SYSTEM("TC TASK CREATE FAILD\n");
-    };
+    }
 }
 static void OLSR_TS_TASK_INIT()
 {
@@ -58,7 +58,7 @@ static void OLSR_TS_TASK_INIT()
   else
     {
       DEBUG_PRINT_OLSR_SYSTEM("TS TASK CREATE FAILD\n");
-    };
+    }
 }
 static void olsrSendTaskInit(dwDevice_t *dev)
 {
@@ -70,26 +70,26 @@ static void olsrSendTaskInit(dwDevice_t *dev)
   else
     {
       DEBUG_PRINT_OLSR_SYSTEM("SEND TASK CREATE FAILD\n");
-    };
+    }
 }
 static void olsrRecvTaskInit(dwDevice_t *dev)
 {
   DEBUG_PRINT_OLSR_SYSTEM("START_OLSR_RECV_TASK_INIT\n");
-  if(xTaskCreate(olsrRecvTask, "OLSR_RECV", 8*configMINIMAL_STACK_SIZE, dev,LPS_DECK_TASK_PRI, NULL)==pdPASS)
+  if(xTaskCreate(olsrRecvTask, "OLSR_RECV", 4*configMINIMAL_STACK_SIZE, dev,LPS_DECK_TASK_PRI, NULL)==pdPASS)
     {
       DEBUG_PRINT_OLSR_SYSTEM("RECV TASK CREATE SUCCESSFUL\n");
     }
   else
     {
       DEBUG_PRINT_OLSR_SYSTEM("RECV TASK CREATE FAILD\n");
-    };
+    }
 }
 
 static void olsrTaskInit(dwDevice_t *dev)
 {
     DEBUG_PRINT_OLSR_SYSTEM("TASK_INIT");
     olsrHelloTaskInit();
-    // olsrTcTaskInit();
+    olsrTcTaskInit();
     olsrSendTaskInit(dev);
     olsrRecvTaskInit(dev);
 }

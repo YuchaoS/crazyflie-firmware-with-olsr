@@ -383,7 +383,7 @@ bool olsrMprSelectorSetIsEmpty();
 
 bool olsrEraseMprSelectorTuples(olsrMprSelectorSet_t *mprSelectorSet, olsrAddr_t addr);
 
-void olsrDelMprSelectorTupleByPos(setIndex_t pos);
+void olsrDelMprSelectorTupleByPos(olsrMprSelectorSet_t *mprSelectorSet,setIndex_t pos);
 
 void olsrPrintMprSelectorSet(olsrMprSelectorSet_t *mprSelectorSet);
 

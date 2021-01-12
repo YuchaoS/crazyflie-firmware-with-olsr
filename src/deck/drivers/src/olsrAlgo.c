@@ -155,9 +155,9 @@ static uint16_t getAnsn()
   return retVal;
 }
 
-static void addNeighborTuple(const olsrNeighborTuple_t* tuple)
+static void addNeighborTuple(olsrNeighborSet_t& neighborSet const olsrNeighborTuple_t* tuple)
 {
-  olsrInsertToNeighborSet(&olsrNeighborSet,tuple);
+  olsrInsertToNeighborSet(neighborSet,tuple);
   incrementAnsn();
 }
 
@@ -177,9 +177,9 @@ static void addMprSelectorTuple(const olsrMprSelectorTuple_t * tuple)
   incrementAnsn();
 }
 
-static void addTopologyTuple(const olsrTopologyTuple_t *tuple)
+static void addTopologyTuple(olsrTopologySet_t& topologySet const olsrTopologyTuple_t *tuple)
 {
-  olsrInsertToTopologySet(&olsrTopologySet,tuple);
+  olsrInsertToTopologySet(topologySet,tuple);
 }
 
 static void linkTupleAdded(olsrLinkTuple_t *tuple,uint8_t willingness)
@@ -199,7 +199,7 @@ static void linkTupleAdded(olsrLinkTuple_t *tuple,uint8_t willingness)
     }
   if(olsrFindNeighborByAddr(&olsrNeighborSet,tuple->m_neighborAddr) == -1)
     {
-      addNeighborTuple(&nbTuple);
+      addNeighborTuple(&olsrNeighborSet,&nbTuple);
     }
 }
 static void linkTupleUpdated(olsrLinkTuple_t *tuple,uint8_t willingness)
@@ -603,6 +603,12 @@ void mprCompute()
     }
 
 }
+static void olsrSetExpire()
+{
+  olsrLinkTupleClearExpire();//
+  olsrNbTwoHopTupleTimerExpire();
+  olsrMprSelectorTupleTimerExpire();
+}
 void olsrPrintAll()
 {
   olsrPrintLinkSet(&olsrLinkSet);
@@ -615,31 +621,12 @@ void olsrPrintAll()
 }
 void olsrProcessHello(const olsrMessage_t* helloMsg)
 {
-  /*
-  link->nb->nb2->mpr->mprs
-  */
-  // xSemaphoreTake(olsrLinkSetLock,portMAX_DELAY);
-  // xSemaphoreTake(olsrNeighborSetLock,portMAX_DELAY);
-  // xSemaphoreTake(olsrTwoHopNeighborSetLock,portMAX_DELAY);
-  // xSemaphoreTake(olsrMprSetLock,portMAX_DELAY);
-  // xSemaphoreTake(olsrMprSelectorSetLock,portMAX_DELAY);
-  xSemaphoreTake(olsrAllSetLock,portMAX_DELAY);
-  olsrLinkTupleClearExpire();//
-  olsrNbTwoHopTupleTimerExpire();
-  olsrMprSelectorTupleTimerExpire();
   linkSensing(helloMsg);
   populateNeighborSet(helloMsg);
   populateTwoHopNeighborSet(helloMsg); 
   mprCompute();
   populateMprSelectorSet(helloMsg);
   olsrPrintAll();
-  xSemaphoreGive(olsrAllSetLock);
-
-  // xSemaphoreGive(olsrMprSelectorSetLock);
-  // xSemaphoreGive(olsrMprSetLock);
-  // xSemaphoreGive(olsrTwoHopNeighborSetLock);
-  // xSemaphoreGive(olsrNeighborSetLock);
-  // xSemaphoreGive(olsrLinkSetLock);
 }
 //
 void olsrProcessTc(const olsrMessage_t* tcMsg)
@@ -681,7 +668,7 @@ void olsrProcessTc(const olsrMessage_t* tcMsg)
           topologyTuple.m_seqenceNumber = ansn;
           topologyTuple.m_expirationTime = now + tcMsg->m_messageHeader.m_vTime;
           topologyTuple.m_distance = tcBody->m_content[i].m_distance;
-          addTopologyTuple(&topologyTuple);
+          addTopologyTuple(&olsrTopologySet,&topologyTuple);
         }
     }
 }
@@ -850,6 +837,8 @@ void olsrPacketDispatch(const packet_t* rxPacket)
   int lengthOfPacket = olsrPacket->m_packetHeader.m_packetLength;
   int index = sizeof(olsrPacket->m_packetHeader);
   void *message = (void *)olsrPacket->m_packetPayload;
+  xSemaphoreTake(olsrAllSetLock,portMAX_DELEY);
+  olsrSetExpire();
   while(index<lengthOfPacket)
     {
       olsrMessageHeader_t* messageHeader = (olsrMessageHeader_t*)message;
@@ -875,7 +864,7 @@ void olsrPacketDispatch(const packet_t* rxPacket)
                 DEBUG_PRINT_OLSR_RECEIVE("recv a TC\n");
                 // xSemaphoreTake(olsrLinkSetLock,portMAX_DELAY);
                 // xSemaphoreTake(olsrTopologySetLock,portMAX_DELAY);
-                // olsrProcessTc((olsrMessage_t*)message);
+                olsrProcessTc((olsrMessage_t*)message);
                 // xSemaphoreGive(olsrTopologySetLock);
                 // xSemaphoreGive(olsrLinkSetLock);
                 // olsr_tc_forward(olsr_message);
@@ -908,6 +897,7 @@ void olsrPacketDispatch(const packet_t* rxPacket)
       index += messageHeader->m_messageSize;
       message += messageHeader->m_messageSize;
     }
+    xSemaphoreGive(olsrAllSetLock);
     // olsrRoutingTableComputation();
 }
 
@@ -1151,7 +1141,7 @@ bool olsrMprSelectorTupleTimerExpire()
         {
           setIndex_t delItem = candidate;
           candidate = tmp.next;
-          olsrDelMprSelectorTupleByPos(delItem);
+          olsrDelMprSelectorTupleByPos(&olsrMprSelectorSet,delItem);
           isChange = true;
           continue;
         }
@@ -1166,69 +1156,32 @@ void olsrHelloTask(void *ptr)
   {
       /* code */
       vTaskDelay(M2T(OLSR_HELLO_INTERVAL));
-      // DEBUG_PRINT_OLSR_HELLO("to take olsrLinkSetLock\n");
-      // xSemaphoreTake(olsrLinkSetLock,portMAX_DELAY);
-      // DEBUG_PRINT_OLSR_HELLO("got olsrLinkSetLock\n");
-      // DEBUG_PRINT_OLSR_HELLO("to take olsrNeighborSetLock\n");
-      // xSemaphoreTake(olsrNeighborSetLock,portMAX_DELAY);
-      // DEBUG_PRINT_OLSR_HELLO("got olsrNeighborSetLock\n");
-      // DEBUG_PRINT_OLSR_HELLO("to take olsrTwoHopNeighborSetLock\n");
-      // xSemaphoreTake(olsrTwoHopNeighborSetLock,portMAX_DELAY);
-      // DEBUG_PRINT_OLSR_HELLO("got olsrTwoHopNeighborSetLock\n");
-      // DEBUG_PRINT_OLSR_HELLO("to take olsrMprSetLock\n");
-      // xSemaphoreTake(olsrMprSetLock,portMAX_DELAY);
-      // DEBUG_PRINT_OLSR_HELLO("got olsrMprSetLock\n");
-      // DEBUG_PRINT_OLSR_HELLO("to take olsrMprSelectorSetLock\n");
-      // xSemaphoreTake(olsrMprSelectorSetLock,portMAX_DELAY);
-      // DEBUG_PRINT_OLSR_HELLO("got olsrMprSelectorSetLock\n");
-        // DEBUG_PRINT_OLSR_HELLO("to take set lock in hello task\n");
       xSemaphoreTake(olsrAllSetLock,portMAX_DELAY);
-        // DEBUG_PRINT_OLSR_HELLO("got set lock in hello task\n");
       olsrLinkTupleClearExpire();
       olsrSendHello();
       xSemaphoreGive(olsrAllSetLock);
-      // DEBUG_PRINT_OLSR_HELLO("free set lock in hello task\n");
-      // xSemaphoreGive(olsrMprSelectorSetLock);
-      // xSemaphoreGive(olsrMprSetLock);
-      // xSemaphoreGive(olsrTwoHopNeighborSetLock);
-      // xSemaphoreGive(olsrNeighborSetLock);
-      // xSemaphoreGive(olsrLinkSetLock);
   }
 }
 
 void olsrTcTask(void *ptr)
 {
-  DEBUG_PRINT_OLSR_SYSTEM("TC_SEND TO QUEUE\n");
   while(true)
   {
-    xSemaphoreTake(olsrMprSelectorSetLock,portMAX_DELAY);
+    xSemaphoreTake(olsrAllSetLock,portMAX_DELAY);
     if(!olsrMprSelectorSetIsEmpty())
       {
-        // olsrSendTc();
+        olsrSendTc();
         DEBUG_PRINT_OLSR_TC("Send TC yes\n");
       }
     else
       {
         DEBUG_PRINT_OLSR_TC("Not sending any TC, no one selected me as MPR.\n");
       }
-    xSemaphoreGive(olsrMprSelectorSetLock);
+    xSemaphoreGive(olsrAllSetLock);
     vTaskDelay(M2T(OLSR_TC_INTERVAL));
   }
 }
 
-void olsrDupTupleTimerExpireTask(void *ptr)
-{
-  while(true)
-    {
-      xSemaphoreTake(olsrDuplicateSetLock,portMAX_DELAY);
-      if(olsrDuplicateSetClearExpire())
-        {
-          DEBUG_PRINT_OLSR_DUPLICATE("has tuple be deleted\n");
-        }
-      xSemaphoreGive(olsrDuplicateSetLock);
-      vTaskDelay(M2T(OLSR_DUP_CLEAR_INTERVAL));
-    }
-}
 
 // void olsrSendTask(void *ptr)
 // {
