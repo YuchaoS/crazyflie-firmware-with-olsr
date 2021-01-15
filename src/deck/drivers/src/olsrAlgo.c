@@ -16,7 +16,7 @@
 #define OLSR_NEIGHB_HOLD_TIME (3*OLSR_HELLO_INTERVAL)
 #define OLSR_TC_INTERVAL 5000
 #define OLSR_TOP_HOLD_TIME (3*OLSR_TC_INTERVAL)
-#define OLSR_DUP_HOLD_TIME 30000
+#define OLSR_DUP_HOLD_TIME 10000
 #define TS_INTERVAL 1000
 #define OLSR_ROUTING_SET_HOLD_TIME 10000
 #define OLSR_DUP_CLEAR_INTERVAL 30000
@@ -64,6 +64,7 @@ static SemaphoreHandle_t olsrAllSetLock;
 bool olsrMprSelectorTupleTimerExpire();
 bool  olsrLinkTupleClearExpire();
 bool  olsrNbTwoHopTupleTimerExpire();
+bool olsrTopologyTupleTimerExpire();
 
 //rxcallback
 
@@ -608,6 +609,7 @@ static void olsrSetExpire()
   olsrLinkTupleClearExpire();//
   olsrNbTwoHopTupleTimerExpire();
   olsrMprSelectorTupleTimerExpire();
+  olsrTopologyTupleTimerExpire();
 }
 void olsrPrintAll()
 {
@@ -633,7 +635,6 @@ void olsrProcessTc(const olsrMessage_t* tcMsg)
 {
   olsrPrintLinkSet(&olsrLinkSet);
   olsrTime_t now = xTaskGetTickCount();
-  DEBUG_PRINT_OLSR_TC("now:%d\n",now);
   olsrAddr_t originator = tcMsg->m_messageHeader.m_originatorAddress;
   olsrAddr_t sender = tcMsg->m_messageHeader.m_relayAddress;
   olsrTopologyMessage_t* tcBody = (olsrTopologyMessage_t *)tcMsg->m_messagePayload;
@@ -648,7 +649,7 @@ void olsrProcessTc(const olsrMessage_t* tcMsg)
   setIndex_t topologyTupleIndex = olsrFindNewerTopologyTuple(&olsrTopologySet,originator,ansn);
   if(topologyTupleIndex != -1)
     {
-      DEBUG_PRINT_OLSR_TC("not newes one\n");
+      DEBUG_PRINT_OLSR_TC("not the newerst one\n");
       return;
     }
   olsrEraseOlderTopologyTuples(&olsrTopologySet,originator,ansn);
@@ -657,7 +658,6 @@ void olsrProcessTc(const olsrMessage_t* tcMsg)
   for(int i = 0;i < count ;i++)
     {
       olsrAddr_t destAddr =  tcBody->m_content[i].m_address;
-      DEBUG_PRINT_OLSR_TC("destAddr:%d\n",tcBody->m_content[i].m_address);
       setIndex_t topologyIt = olsrFindTopologyTuple(&olsrTopologySet,destAddr,originator);
       if(topologyIt != -1)
         {
@@ -685,6 +685,7 @@ void forwardDefault(olsrMessage_t* olsrMessage, setIndex_t duplicateIndex)
   setIndex_t symIndex = olsrFindSymLinkTuple(&olsrLinkSet,sender,now);
   if(symIndex == -1)
     {
+      DEBUG_PRINT_OLSR_FORWARD("not from sym link\n");
       return;
     }
   if(msgHeader->m_timeToLive > 1)
@@ -694,7 +695,9 @@ void forwardDefault(olsrMessage_t* olsrMessage, setIndex_t duplicateIndex)
         {
           msgHeader->m_timeToLive--;
           msgHeader->m_hopCount++;
+          msgHeader->m_relayAddress = myAddress;
           xQueueSend(g_olsrSendQueue,olsrMessage,portMAX_DELAY);
+          DEBUG_PRINT_OLSR_FORWARD("forward successful\n");
         }
     }
   if(duplicateIndex != -1)
@@ -885,13 +888,13 @@ void olsrPacketDispatch(const packet_t* rxPacket)
           doForward = false;
         }
 
-      // if(doForward)
-      //   {
-      //     if(olsrMessage->m_messageHeader.m_messageType != HELLO_MESSAGE)
-      //       {
-      //         forwardDefault(olsrMessage,duplicated);
-      //       }
-      //   }
+      if(doForward)
+        {
+          if(type == TC_MESSAGE)
+            {
+              forwardDefault((olsrMessage_t *)message,duplicated);
+            }
+        }
 
       index += messageHeader->m_messageSize;
       message += messageHeader->m_messageSize;
@@ -1058,7 +1061,6 @@ bool olsrLinkTupleClearExpire() //
   while(candidate != -1)
     {
       olsrLinkSetItem_t tmp = olsrLinkSet.setData[candidate];
-      DEBUG_PRINT_OLSR_LINK("now is :%ld,expire is :%ld\n",now,tmp.data.m_expirationTime);
       if(tmp.data.m_expirationTime < now)
         {
           olsrDelNeighborByAddr(&olsrNeighborSet,tmp.data.m_neighborAddr);

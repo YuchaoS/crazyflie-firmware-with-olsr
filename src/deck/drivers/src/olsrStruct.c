@@ -956,7 +956,7 @@ void olsrPrintDuplicateSet(olsrDuplicateSet_t *duplicateSet)
   while(candidate != -1)
     {
       olsrDuplicateSetItem_t tmp = duplicateSet->setData[candidate];
-      DEBUG_PRINT_OLSR_DUPLICATE("DUPSET:addr:%d,seq:%d",tmp.data.m_addr,tmp.data.m_seqenceNumber);
+      DEBUG_PRINT_OLSR_DUPLICATE("DUPSET:addr:%d,seq:%d\n",tmp.data.m_addr,tmp.data.m_seqenceNumber);
       candidate = tmp.next;
     }
 }
