@@ -619,7 +619,7 @@ void olsrPrintAll()
   olsrPrintMprSet(&olsrMprSet);
   olsrPrintTopologySet(&olsrTopologySet);
   olsrPrintMprSelectorSet(&olsrMprSelectorSet);
-  olsrPrintDuplicateSet(&olsrDuplicateSet);
+  // olsrPrintDuplicateSet(&olsrDuplicateSet);
 }
 void olsrProcessHello(const olsrMessage_t* helloMsg)
 {
@@ -680,7 +680,7 @@ void forwardDefault(olsrMessage_t* olsrMessage, setIndex_t duplicateIndex)
 {
   olsrTime_t now = xTaskGetTickCount();
   olsrMessageHeader_t* msgHeader = &olsrMessage->m_messageHeader;
-  olsrAddr_t sender = msgHeader->m_originatorAddress;
+  olsrAddr_t sender = msgHeader->m_relayAddress;
   uint16_t seq = msgHeader->m_messageSeq;
   setIndex_t symIndex = olsrFindSymLinkTuple(&olsrLinkSet,sender,now);
   if(symIndex == -1)
